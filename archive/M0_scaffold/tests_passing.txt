@@ -1,0 +1,7 @@
+PASS test_kernel_reference_shape_and_sign
+PASS test_ltd_on_post_before_pre
+PASS test_ltp_on_pre_before_post
+PASS test_rstdp_no_reward_no_change
+PASS test_rstdp_reward_sign
+PASS test_weight_clamp
+6/6 passed

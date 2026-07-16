@@ -1,0 +1,24 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+# experiment artifacts
+wandb/
+runs/
+checkpoints/
+*.pt
+*.npz
+# FPGA build artifacts
+fpga/**/.Xil/
+fpga/**/*.jou
+fpga/**/*.log
+fpga/**/vivado*/
+*.bit
+*.hwh
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/

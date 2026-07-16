@@ -1,0 +1,15 @@
+# Target Python 3.11 (torch / pybullet / snntorch wheels are unreliable on 3.13).
+# Create the env with:  py -3.11 -m venv .venv  &&  .venv\Scripts\activate
+#
+# Pinned to known-good ranges; bump deliberately.
+numpy>=1.26,<2.3
+torch>=2.2            # install the CUDA build matching your GPU from pytorch.org
+snntorch>=0.9
+pybullet>=3.2.6
+stable-baselines3>=2.3
+gymnasium>=0.29
+wandb>=0.17           # experiment tracking (proposal Sec. 4.4)
+matplotlib>=3.8
+pytest>=8.0
+# FPGA host side (install on the board's ARM/PYNQ image, not the dev machine):
+#   pynq

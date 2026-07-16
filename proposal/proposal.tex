@@ -1,0 +1,771 @@
+\documentclass[11pt,a4paper]{article}
+
+% --- Packages ---
+\usepackage[a4paper, margin=2.5cm]{geometry}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{microtype}
+\usepackage{titlesec}
+\usepackage{subcaption}
+\usepackage[skins, breakable]{tcolorbox}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric, fit, backgrounds}
+\usepackage[colorlinks=true, linkcolor=blue!60!black,
+            citecolor=blue!60!black, urlcolor=blue!70!black]{hyperref}
+\usepackage[ruled,vlined,linesnumbered]{algorithm2e}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+
+% --- Color palette ---
+\definecolor{accentblue}{RGB}{25, 80, 160}
+\definecolor{accentgray}{RGB}{90, 95, 105}
+\definecolor{boxbg}{RGB}{240, 245, 255}
+\definecolor{boxborder}{RGB}{25, 80, 160}
+\definecolor{warnbg}{RGB}{255, 248, 235}
+\definecolor{warnborder}{RGB}{200, 130, 30}
+
+% --- Section formatting ---
+\titleformat{\section}{\large\bfseries\color{accentblue}}{{\color{accentblue}\thesection.}}{0.5em}{}[\color{accentblue}\titlerule]
+\titleformat{\subsection}{\normalsize\bfseries\color{accentgray}}{\thesubsection.}{0.5em}{}
+\titleformat{\subsubsection}{\normalsize\itshape\color{accentgray}}{\thesubsubsection.}{0.5em}{}
+
+% --- Tcolorbox styles ---
+\newtcolorbox{keybox}[1]{
+  enhanced, breakable,
+  colback=boxbg, colframe=boxborder,
+  fonttitle=\bfseries\color{white},
+  coltitle=white, colbacktitle=boxborder,
+  title=#1, arc=4pt, boxrule=0.8pt,
+  left=6pt, right=6pt, top=4pt, bottom=4pt
+}
+\newtcolorbox{notebox}{
+  enhanced, colback=warnbg, colframe=warnborder,
+  arc=4pt, boxrule=0.8pt, fontupper=\small,
+  left=6pt, right=6pt, top=4pt, bottom=4pt
+}
+\newtcolorbox{riskbox}[1]{
+  enhanced, breakable,
+  colback=red!4!white, colframe=red!45!black,
+  fonttitle=\bfseries\color{white},
+  coltitle=white, colbacktitle=red!45!black,
+  title=#1, arc=4pt, boxrule=0.8pt, fontupper=\small,
+  left=6pt, right=6pt, top=4pt, bottom=4pt
+}
+
+% --- Math operators ---
+\DeclareMathOperator{\SynOps}{SynOps}
+\newcommand{\vth}{V_{\mathrm{th}}}
+\newcommand{\vmem}{V_{\mathrm{mem}}}
+
+% =========================================================
+\begin{document}
+
+% --- Title block ---
+\begin{center}
+  {\LARGE\bfseries\color{accentblue}
+    Memristor-Inspired Neuromorphic Control for Robotics:\\[4pt]
+    A Comparative Study of SNN and DNN Architectures\\[4pt]
+    with FPGA-Accelerated Synaptic Emulation}\\[1.2em]
+  {\large\color{accentgray} Undergraduate Thesis Proposal --- Electrical \& Computer Engineering}\\[0.4em]
+\end{center}
+
+\vspace{0.5em}
+\hrule height 1.5pt
+\vspace{1.2em}
+
+% --- Abstract ---
+\begin{keybox}{Abstract}
+This thesis proposes a hardware-software co-design framework for neuromorphic robotic
+control, combining spiking neural networks (SNNs) with memristor-inspired synaptic
+plasticity and FPGA-accelerated weight update logic. A leaky integrate-and-fire (LIF)
+SNN with \emph{reward-modulated} spike-timing-dependent plasticity (R-STDP) is deployed
+in a simulated obstacle-avoidance task (PyBullet) and evaluated against a trained deep
+neural network (DNN) baseline and a reinforcement-learning (RL) policy; a purely Hebbian
+STDP variant is retained as an ablation. The FPGA implements the
+parallel synaptic conductance update array in hardware, a topology and update rule
+that is structurally analogous to the crossbar-array dynamics of physical memristive
+devices (a memristor-\emph{inspired} accelerator, not a device-level emulator). The
+central hypothesis is that online, reward-gated synaptic adaptation---impossible in a
+frozen DNN---enables measurably faster performance recovery when the environment changes
+mid-episode, while the FPGA acceleration provides latency advantages on the
+weight-update kernel that justify the hardware-software co-design perspective.
+Metrics include response latency, synaptic operation count (SynOps), adaptation
+recovery time, and robustness under sensor noise.
+\end{keybox}
+
+\vspace{1em}
+
+% =========================================================
+\section{Motivation and Research Gap}
+
+Modern robotic controllers are overwhelmingly based on deep neural networks trained
+offline: once deployed, their weights are frozen. This works well in static
+environments but introduces a fundamental brittleness---any distributional shift (new
+obstacles, sensor degradation, lighting changes) requires costly retraining. Biological
+neural systems solve this through \emph{online synaptic plasticity}: the synapse itself
+carries memory and continues adapting throughout the lifetime of the organism.
+
+Memristive devices are the closest physical analog to biological synapses. Their
+resistance state encodes a weight, updates depend on the history of current flow (state
+retention), the relationship is nonlinear and bounded (saturation), and device
+fabrication introduces stochasticity---all hallmarks of biological synaptic behavior
+\cite{strukov2008}. An FPGA crossbar-style update array is the most accessible way to
+emulate the \emph{structure} of this parallel, in-memory computation without
+fabricating physical memristor hardware; it reproduces the topology and update locality
+of a crossbar, not the continuous-time device physics.
+
+\begin{keybox}{Core Research Questions}
+\begin{enumerate}[label=\textbf{RQ\arabic*.}, leftmargin=*, itemsep=2pt]
+  \item Does an SNN with online, reward-modulated STDP plasticity recover navigation
+        performance significantly faster than a frozen DNN when the environment changes
+        mid-episode?
+  \item Does FPGA-parallel synaptic update logic reduce weight-update latency
+        compared to sequential CPU/GPU computation, and at what network sizes does
+        this advantage actually appear?
+  \item What is the energy-efficiency tradeoff (SynOps vs.\ multiply-accumulate
+        operations) between the SNN and DNN approaches at equal task performance?
+\end{enumerate}
+\end{keybox}
+
+% =========================================================
+\section{Background}
+
+\subsection{Memristive Devices and Synaptic Emulation}
+
+A memristor is a two-terminal passive element whose resistance $R(t)$ is a function of
+the history of current through it \cite{strukov2008}. Its conductance $g = 1/R$ evolves
+as:
+\begin{equation}
+  \frac{dg}{dt} = f(g, V) = \alpha\, V(t)\,\bigl[g_{\max} - g\bigr] \cdot \mathbf{1}_{V>0}
+                           - \beta\, V(t)\,\bigl[g - g_{\min}\bigr] \cdot \mathbf{1}_{V<0}
+  \label{eq:memristor}
+\end{equation}
+where $\alpha,\beta$ are potentiation/depression rates, and $[g_{\min}, g_{\max}]$
+bounds the conductance. This naturally implements bounded, nonlinear, state-dependent
+weight updates---the same qualitative properties (boundedness, history-dependence,
+locality) that we model in software and reproduce \emph{structurally} on FPGA. The
+discrete-time digital implementation does not reproduce the continuous-time
+differential dynamics of Eq.~\eqref{eq:memristor}, and this distinction is maintained
+throughout the thesis.
+
+\subsection{Leaky Integrate-and-Fire Neuron}
+
+Each neuron in the SNN follows the LIF model:
+\begin{equation}
+  \tau_m \frac{d\vmem(t)}{dt} = -\vmem(t) + R_m\,I_{\mathrm{syn}}(t)
+  \label{eq:lif}
+\end{equation}
+where $\tau_m$ is the membrane time constant, $R_m$ is membrane resistance, and
+$I_{\mathrm{syn}}$ is the total synaptic input current. A spike is emitted and the
+membrane is reset when $\vmem(t) \geq \vth$:
+\begin{equation}
+  s(t) = \begin{cases} 1 & \text{if } \vmem(t) \geq \vth \\ 0 & \text{otherwise} \end{cases},
+  \qquad \vmem \leftarrow V_{\mathrm{reset}} \text{ after spike.}
+  \label{eq:spike}
+\end{equation}
+The synaptic input is filtered through an exponential kernel:
+\begin{equation}
+  I_{\mathrm{syn}}(t) = \sum_j w_j \sum_{t_j^f} \exp\!\left(-\frac{t - t_j^f}{\tau_s}\right)
+  \label{eq:syn}
+\end{equation}
+where $t_j^f$ are the firing times of presynaptic neuron $j$ and $w_j$ is its synaptic
+weight.
+
+\subsection{Spike-Timing-Dependent Plasticity (STDP)}
+
+STDP is the biologically observed learning rule in which synaptic strength is modulated
+by the relative timing of pre- and post-synaptic spikes \cite{bi1998}. The weight
+update for synapse $j$ is:
+\begin{equation}
+  \Delta w_j = \begin{cases}
+    A_+\,\exp\!\left(-\dfrac{\Delta t}{\tau_+}\right) & \text{if } \Delta t > 0 \quad
+      \text{(pre before post: LTP)} \\[8pt]
+    -A_-\,\exp\!\left(\phantom{-}\dfrac{\Delta t}{\tau_-}\right) & \text{if } \Delta t < 0 \quad
+      \text{(post before pre: LTD)}
+  \end{cases}
+  \label{eq:stdp}
+\end{equation}
+where $\Delta t = t_{\mathrm{post}} - t_{\mathrm{pre}}$, and $A_+, A_-, \tau_+, \tau_-$
+are positive constants controlling potentiation and depression amplitudes and time
+windows. Weights are bounded: $w_j \in [w_{\min},\, w_{\max}]$, linking directly to the
+memristor conductance model in Eq.~\eqref{eq:memristor}.
+
+\begin{notebox}
+  \textbf{Link to memristor:} Eq.~\eqref{eq:stdp} is a discretized, spike-triggered
+  version of Eq.~\eqref{eq:memristor}. A positive voltage pulse (pre fires before post)
+  increases conductance (LTP); a negative pulse does the reverse (LTD). This is why the
+  FPGA implementation of the weight-update crossbar is structurally an STDP
+  accelerator whose topology mirrors a memristive crossbar---it is described as
+  \emph{memristor-inspired} rather than a memristor emulator throughout this proposal.
+\end{notebox}
+
+\subsection{The Credit-Assignment Problem: Reward-Modulated STDP as the Primary Rule}
+\label{sec:credit}
+
+A central design decision of this thesis follows directly from a limitation of
+Eq.~\eqref{eq:stdp}. Pure STDP is \emph{Hebbian}: it strengthens or weakens synapses
+based only on the relative timing of pre- and post-synaptic spikes, with no reference
+to task outcome. There is no term in the rule that encodes ``this spike pattern
+preceded a collision, suppress it.'' Consequently, once an SNN is released from
+surrogate-gradient pretraining into pure online STDP, weight drift is driven by the
+correlation structure of the input spike trains---not by navigation success.
+Surrogate-gradient pretraining establishes a good starting point, but pure STDP has no
+mechanism to keep the network near that point in a \emph{task-relevant} direction. This
+is precisely why Lobov et al.\ \cite{lobov2020} and, more explicitly, Juarez-Lora
+et al.\ \cite{juarez2022} use \emph{reward-modulated} STDP (R-STDP), in which a global
+reward/error signal gates an eligibility trace before it is consolidated into
+$\Delta w_{ij}$.
+
+Because the central hypothesis (H1) is a claim about \emph{task-relevant} recovery,
+this thesis adopts \textbf{R-STDP as the primary learning rule}, and retains pure
+Hebbian STDP as an ablation used to demonstrate exactly why reward modulation is
+necessary:
+
+\begin{enumerate}[leftmargin=*, itemsep=3pt]
+  \item \textbf{(Primary plan) R-STDP.} An eligibility-trace buffer $e_{ij}(t)$ per
+        synapse is updated by the Hebbian term of Eq.~\eqref{eq:stdp} on every spike
+        pair, and a scalar reward/collision signal $r(t)$ (e.g.\ $r=-1$ on collision,
+        small positive shaping reward for progress toward goal) is broadcast to all
+        synapses:
+        \begin{equation}
+          \frac{de_{ij}}{dt} = -\frac{e_{ij}}{\tau_e} + \Delta w_{ij}^{\text{STDP}},
+          \qquad
+          \Delta w_{ij} = \eta\, r(t)\, e_{ij}(t).
+          \label{eq:rstdp}
+        \end{equation}
+        The FPGA design contains the per-synapse $\Delta t$ array and LUT; R-STDP adds
+        one eligibility-trace register and one scalar multiply per synapse, which is a
+        modest hardware extension.
+  \item \textbf{(Ablation) Pure STDP.} The same network with the reward gate removed
+        ($\Delta w_{ij} = \Delta w_{ij}^{\text{STDP}}$ applied directly). This ablation
+        is expected \emph{not} to recover the navigation policy in a task-relevant way;
+        any residual effect is a \emph{representation-level} change (e.g.\ sensory-layer
+        receptive-field drift in response to the post-shift input statistics) rather
+        than policy adaptation. Contrasting R-STDP against this ablation is what
+        attributes recovery specifically to reward-gated plasticity.
+\end{enumerate}
+
+\begin{riskbox}{Risk: STDP Credit Assignment}
+If reward modulation were omitted, H1 would risk failing for reasons unrelated to
+memristor-style plasticity (i.e.\ because Hebbian drift is task-agnostic), which would
+muddy the thesis conclusion regardless of how well the FPGA or simulation work is
+executed. Adopting R-STDP as the primary rule removes this confound. The
+eligibility-trace and reward-broadcast machinery is small in both software and hardware
+(one register + one multiply per synapse), so it is committed to from the start rather
+than deferred; the pure-STDP ablation is cheap because it is the same code path with
+the reward gate disabled.
+\end{riskbox}
+
+% =========================================================
+\section{System Architecture}
+
+The full system has three layers: simulation environment, neural controller, and FPGA
+co-processor.
+
+\begin{figure}[htbp]
+    \centering
+    % Replace with the exact filename you uploaded
+    \includegraphics[width=0.6\textwidth]{mermaid-diagram.png}
+    \caption{System Architecture showing the closed-loop control and FPGA co-processor.}
+    \label{fig:sys_arch}
+\end{figure}
+\subsection{Baseline and Ablation Controllers (Comparison Group)}
+\label{sec:baselines}
+
+Four controllers are used to establish a fair and rigorous comparison:
+
+\begin{enumerate}[leftmargin=*, itemsep=3pt]
+  \item \textbf{MLP-DNN (frozen):} A multi-layer perceptron trained offline via
+        supervised imitation learning on expert trajectories. After training, weights
+        are fixed. This isolates the effect of online plasticity.
+  \item \textbf{MLP-DNN (Online-Updating):} An MLP that performs continuous online
+        learning via stochastic gradient descent (SGD) on a sliding window of recent
+        observations. \emph{Loss target:} to avoid the two obvious failure modes ---
+        (i) pure self-supervision on the network's own past actions, which collapses
+        to a fixed point with no corrective signal, and (ii) continued access to
+        expert labels during Phase~2, which would give this baseline an unfair
+        advantage the SNN does not have --- the online loss is a one-step
+        TD-bootstrapped value/advantage target computed from the robot's own
+        collision and progress-to-goal signals (the same signals used for the
+        R-STDP reward broadcast in Section~\ref{sec:credit}). This keeps the
+        comparison fair: both adapting controllers learn from the same
+        environment-derived feedback, differing only in \emph{how} that feedback is
+        consolidated into weight changes.
+  \item \textbf{SNN (frozen, ablation):} The same LIF-SNN architecture and
+        surrogate-gradient-pretrained weights as the proposed controller, but with
+        plasticity \emph{disabled} during evaluation. This isolates the contribution of
+        spiking/LIF temporal dynamics (which alone may provide some robustness via
+        low-pass filtering, per H4) from the contribution of online plasticity
+        (H1). Without this ablation, any advantage of the SNN--R-STDP controller cannot
+        be attributed to plasticity specifically.
+  \item \textbf{RL Policy (PPO):} A proximal policy optimization agent with an MLP
+        policy network, trained in PyBullet. This is the strongest fixed-policy
+        baseline and represents the current state of practice for learned robotic
+        control. Its policy is frozen post-training for this comparison, so it is not
+        included in the recovery-time comparison but serves as an absolute
+        performance ceiling for Phase~1.
+\end{enumerate}
+
+\begin{notebox}
+  \textbf{Why not CNN?} CNNs are designed for grid-structured spatial data (images).
+  The navigation task uses LiDAR distance readings and pose vectors---a flat,
+  non-spatial observation space better suited to an MLP. Using CNN as the baseline
+  would be testing the wrong inductive bias, not the right one.
+\end{notebox}
+
+\subsection{Proposed Controller: LIF-SNN with R-STDP}
+
+\begin{enumerate}[leftmargin=*, itemsep=3pt]
+  \item \textbf{Input encoding:} LiDAR readings and velocity are encoded as spike trains
+        using rate coding (firing rate proportional to stimulus intensity) for distance
+        channels and time-to-first-spike (TTFS) coding for urgency signals.
+  \item \textbf{Network:} A fully connected LIF-SNN (3--4 layers, $\sim$512--1024
+        neurons) implemented in SNNTorch \cite{eshraghian2023}. Initial weights are
+        pretrained via surrogate-gradient backpropagation to match the MLP-DNN, then
+        \emph{released} to online R-STDP (Section~\ref{sec:credit}) adaptation during
+        evaluation.
+  \item \textbf{Output decoding:} Population vote over output neurons, one population
+        per discrete action (left, right, forward, brake).
+  \item \textbf{Online adaptation:} At each timestep, spike times and the scalar reward
+        signal are sent to the FPGA, which computes $\Delta w_{ij}$ in parallel across
+        all synapses and returns updated weights before the next action.
+\end{enumerate}
+
+\subsection{FPGA Synaptic Update Coprocessor}
+
+The key architectural claim of this thesis is that the STDP weight-update step has the
+same topology and update locality as a memristor crossbar, and that this parallelism
+can be hardware-exploited. On an ideal crossbar, $N \times M$ synapses update
+\emph{simultaneously} in $O(1)$ time. On a CPU, this is an $O(N \cdot M)$ sequential
+(or vectorized-but-still-bandwidth-bound) loop. An FPGA sits between these extremes:
+it can update many synapses per cycle, but---unlike an analog crossbar---it is limited
+by the number of physical DSP/multiplier resources available, so true $O(1)$
+parallelism only holds up to that resource count.
+
+The FPGA implementation (targeting a Xilinx Zynq-7000 or Intel Cyclone~V) consists of:
+
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+  \item \textbf{Spike-time registers:} One register per neuron, holding the most recent
+        spike timestamp $t_j^f$ in fixed-point format (16-bit, 0.1\,ms resolution).
+  \item \textbf{$\Delta t$ computation array:} Parallel subtractors computing
+        $\Delta t_{ij} = t_i^{\mathrm{post}} - t_j^{\mathrm{pre}}$ for a tile of
+        synapses simultaneously (see resource discussion below).
+  \item \textbf{Exponential lookup table (LUT):} Pre-computed STDP kernels stored in
+        BRAM. The STDP window ($\tau_+,\tau_- \approx 20$--$40$\,ms) combined with
+        0.1\,ms timestamp resolution spans 200--400 raw ticks; these are mapped onto
+        64 LUT bins via \emph{logarithmic} (not linear) quantization of
+        $|\Delta t|$, since the exponential kernel in Eq.~\eqref{eq:stdp} varies most
+        steeply for small $|\Delta t|$ and is nearly flat for large $|\Delta t|$.
+        This bin layout is validated against the floating-point kernel in simulation
+        before synthesis (target: $<2\%$ relative error in $\Delta w$).
+  \item \textbf{Weight update array:} Parallel multiply-accumulators applying the
+        LTP/LTD rule and the eligibility-trace update of Eq.~\eqref{eq:rstdp}, and
+        clamping to $[w_{\min}, w_{\max}]$.
+  \item \textbf{AXI4-Stream (DMA) interface:} Implements Direct Memory Access for
+        burst-transferring entire vectors of spike states between CPU RAM and the
+        FPGA, avoiding the per-register transfer overhead of AXI4-Lite.
+\end{itemize}
+
+\begin{riskbox}{Risk: Resource-Constrained ``Parallelism''}
+A fully connected $512\times512$ synapse layer requires on the order of $2.6\times10^5$
+parallel multiply-accumulate units for true one-cycle updates. A Zynq-7020 provides
+only 220 DSP slices. The realistic design therefore \textbf{time-multiplexes} a bank
+of processing elements (PEs) across synapse tiles rather than instantiating one PE per
+synapse---this is not a true $O(1)$ crossbar, and the proposal should not claim it is.
+Additionally, the AXI-DMA round trip per timestep has a fixed latency floor that, for
+small networks, can dominate the actual update compute. Consequently:
+\begin{itemize}[leftmargin=*, itemsep=1pt]
+  \item The 10--50$\times$ speedup claim (H3) applies to the \emph{inner
+        weight-update kernel only}, not the end-to-end control loop including DMA
+        transfer---this hedge is made explicit as a named metric in
+        Section~\ref{sec:metrics}.
+  \item Phase~4 includes a \textbf{network-size sweep} (e.g.\ 64, 128, 256, 512
+        synapses-per-layer) reporting kernel time and end-to-end (including DMA)
+        time for both CPU and FPGA, so the crossover point at which FPGA acceleration
+        becomes worthwhile is an empirical result rather than an assumption. At small
+        sizes, CPU/GPU vectorized BLAS may simply win, and that is a valid finding.
+\end{itemize}
+\end{riskbox}
+
+This architecture is \emph{structurally analogous} to a memristive crossbar: each PE
+corresponds to (a time-multiplexed share of) one synapse, spike arrival is the
+analog of a voltage pulse, and the weight register is the analog of the conductance
+state $g$. Unlike Eq.~\eqref{eq:memristor}, the FPGA operates in discrete time on
+quantized spike events and is resource-bounded rather than truly parallel; the term
+``memristor-inspired'' is used throughout to reflect this.
+
+% =========================================================
+\section{Experimental Setup}
+
+\subsection{Simulation Environment: PyBullet}
+
+All experiments run in PyBullet \cite{coumans2021}, a real-time physics simulation
+library. The scenario:
+
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+  \item \textbf{Robot:} Differential-drive ground vehicle with 360° LiDAR (32 beams,
+        8\,m range) and an IMU. The observation space is deliberately kept flat and
+        non-spatial (LiDAR ranges + pose/velocity) to justify the MLP inductive bias
+        (Section~\ref{sec:baselines}); no camera is used.
+  \item \textbf{Environment:} Enclosed arena ($10 \times 10$\,m) with randomized static
+        obstacles (boxes, cylinders) and dynamic obstacles (moving at 0.3--1.0\,m/s).
+  \item \textbf{Task:} Reach a goal position without collision. Episode length: 60\,s.
+  \item \textbf{Environment shift:} At $t = 30$\,s, the obstacle density doubles and
+        three new dynamic obstacles are injected. This is the critical test of
+        adaptivity.
+\end{itemize}
+
+\subsection{The Key Experiment: Online Adaptation Under Distribution Shift}
+
+This is the experiment that differentiates this thesis from prior work. The protocol:
+
+\begin{enumerate}[leftmargin=*, itemsep=3pt]
+  \item Run all controllers (MLP-DNN frozen, MLP-DNN online, SNN frozen
+        ablation, SNN--R-STDP, and PPO) for the first 30\,s with a fixed
+        environment (Phase 1).
+  \item At $t = 30$\,s, inject the environment shift without stopping the episode
+        (Phase 2).
+  \item Measure \textbf{performance recovery time}: how many seconds until each
+        controller's collision-free navigation rate returns to within 10\% of its
+        Phase~1 baseline.
+  \item The MLP-DNN (frozen), the SNN (frozen ablation), and the PPO policy
+        \emph{cannot} adapt online. The evaluation focuses on comparing recovery
+        times between the SNN--R-STDP controller and the MLP-DNN (online)
+        controller, with the frozen variants providing the non-adapting reference
+        level that defines ``no recovery.''
+\end{enumerate}
+
+\subsection{Evaluation Metrics}
+\label{sec:metrics}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{}p{3.2cm}p{8.2cm}p{1.6cm}@{}}
+  \toprule
+  \textbf{Metric} & \textbf{Definition} & \textbf{Unit} \\
+  \midrule
+  Response latency & $T_{\mathrm{resp}} = T_{\mathrm{action}} - T_{\mathrm{sensor}}$ & ms \\
+  Energy efficiency & Synaptic operations: $\SynOps = \sum_t \sum_{ij} s_i(t)\cdot\mathbf{1}_{w_{ij}\neq 0}$ & ops/step \\
+  Adaptation recovery & $\tau_{\mathrm{rec}}$: seconds to recover 90\% task performance after shift & s \\
+  Robustness & Success rate under additive Gaussian noise $\sigma \in \{0, 0.1, 0.3, 0.5\}$ & \% \\
+  FPGA kernel speedup & $S_{\mathrm{kernel}} = T_{\mathrm{CPU}} / T_{\mathrm{FPGA}}$ for the weight-update kernel only & $\times$ \\
+  FPGA end-to-end speedup & $S_{\mathrm{e2e}} = T_{\mathrm{CPU}} / (T_{\mathrm{FPGA}} + T_{\mathrm{DMA}})$, reported per network size & $\times$ \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.5em}
+\begin{notebox}
+  \textbf{Why SynOps and not $\sum|\Delta w|$?} SynOps counts how many multiply-accumulate
+  operations the network actually performs per timestep, accounting for spike sparsity.
+  It is the standard neuromorphic efficiency metric \cite{davies2018} and maps directly
+  to hardware energy because neurons that do not spike consume no compute. $\sum|\Delta w|$
+  has no physical interpretation and cannot be compared across architectures.
+\end{notebox}
+
+\subsection{Software Stack}
+
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+  \item \textbf{SNN framework:} SNNTorch \cite{eshraghian2023} (Python, PyTorch backend)
+  \item \textbf{RL baseline:} Stable-Baselines3 (PPO) \cite{raffin2021}
+  \item \textbf{Simulation:} PyBullet \cite{coumans2021}
+  \item \textbf{FPGA:} Xilinx Vivado / Intel Quartus (target: Zynq-7020 or Cyclone~V)
+  \item \textbf{Hardware interface:} PyNQ (Python-to-FPGA AXI DMA bridge)
+  \item \textbf{Logging:} Weights \& Biases for experiment tracking
+\end{itemize}
+
+% =========================================================
+\section{Memristor-Inspired Update Model: Fidelity and Scope}
+
+To ground the software and FPGA models in physical device behavior, the Biolek
+memristor model \cite{biolek2009} is used as a \emph{conceptual reference}, not as a
+target for direct emulation:
+\begin{equation}
+  \frac{dx}{dt} = \mu_v\,\frac{R_{\mathrm{on}}}{D^2}\,i(t)\,f(x)
+  \label{eq:biolek}
+\end{equation}
+where $x \in [0,1]$ is the normalized state variable (analogous to normalized
+conductance $g$), $\mu_v$ is the ion mobility, $D$ is the device length, and $f(x)$ is
+a window function that prevents the state from leaving $[0,1]$. The STDP rule in
+Eq.~\eqref{eq:stdp} is a spike-triggered, discrete-time \emph{analogy} to
+Eq.~\eqref{eq:biolek}: a positive $\Delta t$ corresponds qualitatively to a
+potentiating pulse, and a negative $\Delta t$ to a depressing pulse. The thesis does
+not claim quantitative correspondence between $\Delta w_{ij}$ and $\Delta x$ in
+Eq.~\eqref{eq:biolek}; the correspondence is structural (bounded state, history
+dependence, locality of update).
+
+The three claimed memristive \emph{properties} are reproduced structurally as follows
+(software model and FPGA emulation columns describe analogous, not identical,
+mechanisms):
+
+\begin{center}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{}lll@{}}
+  \toprule
+  \textbf{Memristive Property} & \textbf{Software Model} & \textbf{FPGA Implementation} \\
+  \midrule
+  State retention & Weight registers persist between steps & BRAM weight array \\
+  Nonlinearity \& saturation & $w \in [w_{\min}, w_{\max}]$ clamp & Saturating adder \\
+  Stochasticity & Additive noise $\epsilon \sim \mathcal{N}(0, \sigma_w^2)$ & LFSR noise unit \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+% =========================================================
+\section{Expected Results and Hypotheses}
+
+\begin{keybox}{Hypotheses}
+\begin{enumerate}[label=\textbf{H\arabic*.}, leftmargin=*, itemsep=4pt]
+  \item \textbf{Adaptation:} The SNN--R-STDP controller will recover 90\% task
+        performance after the environment shift within $\tau_{\mathrm{rec}} < 5$\,s,
+        outperforming both the frozen MLP-DNN and the online-updating MLP-DNN. The
+        pure-STDP ablation is expected \emph{not} to achieve task-relevant recovery;
+        any effect it shows is confined to a measurable reorganization of sensory-layer
+        representations (quantified via receptive-field drift), while the frozen-SNN
+        ablation shows no such reorganization. This contrast attributes recovery
+        specifically to reward-gated plasticity rather than to Hebbian drift or LIF
+        dynamics alone.
+  \item \textbf{Energy:} SNN SynOps will be $3$--$10\times$ lower than DNN
+        multiply-accumulate operations at equal pre-shift performance, due to spike
+        sparsity.
+  \item \textbf{Latency:} FPGA parallel weight update via AXI-DMA will be
+        $10$--$50\times$ faster than CPU computation for the weight-update
+        \emph{kernel} alone, with the crossover point (network size at which FPGA
+        beats CPU/GPU end-to-end) determined empirically by the Phase~4 sweep.
+  \item \textbf{Robustness:} SNN success rate will degrade more gracefully under
+        increasing sensor noise $\sigma$, due to the temporal integration inherent in
+        LIF dynamics acting as a low-pass filter. The frozen-SNN ablation isolates
+        whether this robustness comes from LIF dynamics alone or requires plasticity.
+\end{enumerate}
+\end{keybox}
+
+The hypotheses are intentionally falsifiable. If H1 does not hold even for R-STDP, the
+thesis conclusion is that conventional DNNs with fast online retraining are a better
+practical strategy than online reward-modulated plasticity for this task class---which
+is itself a valuable finding.
+
+% =========================================================
+\section{Project Timeline and Budget}
+\label{sec:timeline}
+
+\subsection{Phased Timeline (6--9 months)}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{}clp{8.5cm}@{}}
+  \toprule
+  \textbf{Phase} & \textbf{Duration} & \textbf{Deliverables} \\
+  \midrule
+  1 & Weeks 1--4  & Literature review finalized; PyBullet environment built; MLP-DNN
+                    baselines (frozen and online, with TD-based online loss) trained
+                    and evaluated \\
+  2 & Weeks 5--11 & SNN implemented in SNNTorch; surrogate-gradient pretraining;
+                    frozen-SNN ablation evaluated; \textbf{pilot experiment}: R-STDP
+                    vs.\ pure-STDP vs.\ frozen-SNN recovery under the shift (the
+                    go/no-go gate before hardware) \\
+  3 & Weeks 12--17 & PPO baseline trained; full comparative experiment across all
+                     metrics; environment-shift protocol run for all five
+                     controllers; robustness and energy sweeps (H2, H4) \\
+  4 & Weeks 18--24 & FPGA R-STDP accelerator designed and synthesized (resource-aware,
+                     time-multiplexed PE design); LUT bin layout validated against the
+                     software golden reference; hardware-in-loop timing measurements;
+                     network-size sweep for kernel and end-to-end FPGA vs.\ CPU/GPU
+                     speedup \\
+  5 & Weeks 25--30 & Thesis writing; figure generation; revision; presentation prep \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Budget Estimate}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{}lrc@{}}
+  \toprule
+  \textbf{Item} & \textbf{Cost (EUR)} & \textbf{Notes} \\
+  \midrule
+  Xilinx Zynq-7020 SoC board (e.g.\ Digilent Arty Z7-20) & 180--220 &
+    AXI + ARM core; PyNQ compatible \\
+  \textit{Alternative:} Intel Cyclone V (DE10-Nano) & 120--150 &
+    Budget option; HPS for Python side \\
+  LiDAR sensor (RPLIDAR A1M8, if physical demo) & 100--130 &
+    Optional; simulation covers this \\
+  Differential-drive robot chassis (if physical demo) & 80--120 &
+    e.g.\ Waveshare RaspiCar or similar \\
+  GPU cloud compute (Vast.ai, 50 h at \textasciitilde\texteuro1.2/h) & 60--80 &
+    For PPO training and SNN pretraining \\
+  Miscellaneous (cables, SD cards, USB hubs) & 20--30 & \\
+  \midrule
+  \textbf{Total (simulation-only + FPGA)} & \textbf{260--330} & \\
+  \textbf{Total (FPGA + physical robot)} & \textbf{440--580} & \\
+  \midrule
+  \multicolumn{3}{l}{\textit{Both scenarios are well within a 1000--1500\,EUR budget,
+    leaving substantial headroom.}} \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+% =========================================================
+\section{Related Work and Further Reading}
+
+The following papers and resources define the landscape this thesis operates within.
+They are grouped by sub-topic for targeted reading.
+
+\subsection*{Memristive Devices and Neuromorphic Hardware}
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+  \item Strukov et al.\ (2008), \textit{Nature}---``The missing memristor found.''
+        Foundational paper establishing memristors as circuit elements \cite{strukov2008}.
+  \item Biolek et al.\ (2009)---SPICE memristor model with window functions \cite{biolek2009}.
+  \item Merolla et al.\ (2014), \textit{Science}---IBM TrueNorth: 4096 cores,
+        1 million neurons, 256 million synapses at 70\,mW \cite{merolla2014}.
+  \item Davies et al.\ (2018), \textit{IEEE Micro}---Intel Loihi: on-chip STDP,
+        first programmable neuromorphic chip with online learning \cite{davies2018}.
+  \item Shooshtari et al.\ (2025), \textit{Advanced Intelligent Systems}---Review of
+        memristors as the hardware bridge between in-memory computing and SNNs.
+\end{itemize}
+
+\subsection*{Spiking Neural Networks: Theory and Training}
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+  \item Maass (1997), \textit{Neural Networks}---Networks of spiking neurons as the
+        third generation of neural network models \cite{maass1997}.
+  \item Bi \& Poo (1998), \textit{J. Neuroscience}---Original STDP experimental
+        measurement in hippocampal neurons \cite{bi1998}.
+  \item Lee et al.\ (2016), \textit{Front. Neuroscience}---Training deep SNNs via
+        surrogate gradients; the method used for SNN pretraining here.
+  \item Eshraghian et al.\ (2023), \textit{Proc. IEEE}---SNNTorch framework paper;
+        the primary software tool for this thesis \cite{eshraghian2023}.
+\end{itemize}
+
+\subsection*{Neuromorphic Robotics: Most Directly Relevant}
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+  \item Lobov et al.\ (2020), \textit{Front. Neuroscience}---STDP-controlled mobile
+        robot with memristive devices; nearest predecessor to this work \cite{lobov2020}.
+  \item Juarez-Lora et al.\ (2022), \textit{Front. Neurorobotics}---R-STDP for robotic
+        arm control under changing joint friction; demonstrates online adaptation and
+        motivates the reward-modulated rule adopted in Section~\ref{sec:credit}
+        \cite{juarez2022}.
+  \item Abdelrahman et al.\ (2024/2025), \textit{Int. J. Robotics Research}---Convolutional
+        SNN for obstacle avoidance on a Kinova Gen3 arm; tested in Gazebo and real world.
+  \item Stroobants et al.\ (2024), \textit{arXiv:2411.13945}---First full neuromorphic
+        attitude control SNN deployed on a real Crazyflie quadrotor.
+  \item Supic \& Stewart (2022), \textit{ACM}---SNN adaptive control for robot arms;
+        15\% faster task completion with online learning over fixed policies.
+\end{itemize}
+
+\subsection*{FPGA Neuromorphic Acceleration}
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+  \item Qiao et al.\ (2015), \textit{Front. Neuroscience}---ROLLS neuromorphic chip
+        with embedded FPGA interface for spike routing; architectural reference
+        \cite{qiao2015}.
+  \item Neil \& Liu (2014), \textit{IEEE BioCAS}---Minitaur: FPGA-based SNN simulator
+        with on-chip STDP; close analog to the FPGA module proposed here, including
+        its resource-multiplexing approach.
+  \item Prajapati et al.\ (2025), \textit{arXiv:2507.20998}---Memristive SNN with
+        supervised in-situ STDP; most recent circuit-level implementation reference.
+\end{itemize}
+
+\subsection*{Reinforcement Learning Baseline}
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+  \item Schulman et al.\ (2017), \textit{arXiv:1707.06347}---PPO algorithm used for
+        the RL baseline policy.
+  \item Raffin et al.\ (2021), \textit{JMLR}---Stable-Baselines3 library
+        \cite{raffin2021}.
+\end{itemize}
+
+% =========================================================
+\section{Conclusion}
+
+This thesis proposes a concrete, falsifiable comparative study of neuromorphic vs.\
+conventional robotic control, grounded in three interlocking contributions: (1) a
+software SNN with biologically grounded, reward-modulated STDP, evaluated with
+frozen-SNN and pure-STDP ablations that separate the contributions of spiking/LIF
+dynamics, Hebbian drift, and reward-gated online plasticity under environment shift,
+(2) an FPGA coprocessor whose update topology is structurally analogous to a memristive
+crossbar---explicitly scoped as resource-constrained and time-multiplexed rather than
+truly $O(1)$---and (3) a quantitative evaluation framework using standard metrics
+(SynOps, recovery time, kernel and end-to-end FPGA speedup) that allows direct
+comparison with the existing literature.
+
+The project is achievable within a 6--9 month timeline and a budget of 440--580\,EUR
+including physical hardware, or under 350\,EUR for a simulation-only study. The FPGA
+component is not decorative---it is the hardware argument for why memristor-inspired,
+in-memory synaptic computation is worth building, even within the resource limits of a
+commodity FPGA: it makes the parallel-update structure of synaptic learning
+physically instantiable without fabricating nanoscale devices.
+
+% =========================================================
+\begin{thebibliography}{99}
+\small
+
+\bibitem{strukov2008}
+D.~B. Strukov, G.~S. Snider, D.~R. Stewart, and R.~S. Williams,
+``The missing memristor found,''
+\textit{Nature}, vol.~453, pp.~80--83, 2008.
+
+\bibitem{bi1998}
+G.~Q. Bi and M.~M. Poo,
+``Synaptic modifications in cultured hippocampal neurons: dependence on spike timing,
+synaptic strength, and postsynaptic cell type,''
+\textit{Journal of Neuroscience}, vol.~18, no.~24, pp.~10464--10472, 1998.
+
+\bibitem{maass1997}
+W.~Maass,
+``Networks of spiking neurons: The third generation of neural network models,''
+\textit{Neural Networks}, vol.~10, no.~9, pp.~1659--1671, 1997.
+
+\bibitem{merolla2014}
+P.~A. Merolla \textit{et al.},
+``A million spiking-neuron integrated circuit with a scalable communication network
+and interface,''
+\textit{Science}, vol.~345, no.~6197, pp.~668--673, 2014.
+
+\bibitem{davies2018}
+M.~Davies \textit{et al.},
+``Loihi: A neuromorphic manycore processor with on-chip learning,''
+\textit{IEEE Micro}, vol.~38, no.~1, pp.~82--99, 2018.
+
+\bibitem{biolek2009}
+Z.~Biolek, D.~Biolek, and V.~Biolkova,
+``SPICE model of memristor with nonlinear dopant drift,''
+\textit{Radioengineering}, vol.~18, no.~2, pp.~210--214, 2009.
+
+\bibitem{eshraghian2023}
+J.~K. Eshraghian \textit{et al.},
+``SNNTorch: Accelerating neuromorphic engineering with a deep learning algorithm
+library,''
+\textit{Proceedings of the IEEE}, vol.~111, no.~9, pp.~1--19, 2023.
+
+\bibitem{lobov2020}
+S.~A. Lobov \textit{et al.},
+``Spatial properties of STDP in a self-learning spiking neural network enable
+controlling a mobile robot,''
+\textit{Frontiers in Neuroscience}, vol.~14, p.~88, 2020.
+
+\bibitem{juarez2022}
+A.~Juarez-Lora \textit{et al.},
+``R-STDP spiking neural network architecture for motion control on a changing friction
+joint robotic arm,''
+\textit{Frontiers in Neurorobotics}, vol.~16, 2022.
+
+\bibitem{qiao2015}
+N.~Qiao \textit{et al.},
+``A reconfigurable on-line learning spiking neuromorphic processor comprising 256
+neurons and 128K synapses,''
+\textit{Frontiers in Neuroscience}, vol.~9, p.~141, 2015.
+
+\bibitem{raffin2021}
+A.~Raffin \textit{et al.},
+``Stable-Baselines3: Reliable reinforcement learning implementations,''
+\textit{Journal of Machine Learning Research}, vol.~22, no.~268, pp.~1--8, 2021.
+
+\bibitem{coumans2021}
+E.~Coumans and Y.~Bai,
+``PyBullet, a Python module for physics simulation for games, robotics and machine
+learning,'' \url{http://pybullet.org}, 2016--2021.
+
+\end{thebibliography}
+
+\end{document}

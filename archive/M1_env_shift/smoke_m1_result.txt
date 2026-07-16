@@ -1,0 +1,8 @@
+﻿steps=1201  sim_time=60.0s (dt=0.050)
+obs_dim=37  lidar range seen: min_norm=0.038
+shift fired at t=30.0s  (target 30.0s)
+static obstacles: 8 -> 16 (density doubled)
+dynamic obstacles: 3 -> 6
+collisions logged=1156  goal reached at least once=False
+
+M1 SMOKE: PASS
