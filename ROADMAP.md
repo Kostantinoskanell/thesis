@@ -44,6 +44,11 @@ Locked scoping decisions (2026-07-17):
 evaluated over **≥10 random seeds** so comparisons carry confidence intervals — a
 single-run recovery-time difference is not defensible at a defense.
 
+**Every simulation milestone produces a visual** — at minimum one rendered episode
+GIF (`scripts/render_episode.py`) and a diagnostic plot — saved to `archive/`, both to
+document the journey and to *verify behaviour by eye* (watching the robot catches bugs
+metrics hide).
+
 ## Open technical risks (revisit each milestone)
 
 - **STDP destroys the pretrained policy.** The "release to plasticity" step may
