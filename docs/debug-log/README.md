@@ -8,5 +8,6 @@ re-solving the same problem twice.
 |------|-------|------|
 | 2026-07-17 | PyBullet won't install on Python 3.13 (Windows) | [pybullet-python313](2026-07-17_pybullet-python313.md) |
 | 2026-07-17 | M1 smoke test infinite loop (episode-clock reset) | [smoke-test-infinite-loop](2026-07-17_smoke-test-infinite-loop.md) |
+| 2026-07-17 | Navigation expert: 5 failed attempts → A* + defensive braking | [expert-tuning-collisions](2026-07-17_expert-tuning-collisions.md) |
 
 Naming convention: `YYYY-MM-DD_short-slug.md`.

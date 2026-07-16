@@ -169,6 +169,68 @@ def build_m1():
     print("wrote", out.relative_to(ROOT))
 
 
+def build_m1b():
+    import pybullet as p
+    from nmc.envs.nav_env import NavEnv, NavConfig
+    from nmc.controllers.privileged_expert import PrivilegedExpert
+    outdir = ARCHIVE / "M1b_expert"
+    outdir.mkdir(parents=True, exist_ok=True)
+    env = NavEnv(NavConfig(shift_time_s=1e9, episode_len_s=45.0))
+    expert = PrivilegedExpert()
+
+    # Find a successful (collision-free, goal-reaching) episode to display.
+    traj, statics, start, goal = None, None, None, None
+    for seed in range(2000, 2060):
+        obs, _ = env.reset(seed=seed)
+        _, _, g, obst = env.privileged_state()
+        s0, _ = env._robot_pose()
+        xs = [s0.copy()]
+        collided = reached = False
+        while True:
+            obs, _, term, trunc, info = env.step(expert.act(obs, env))
+            pos, _ = env._robot_pose()
+            xs.append(pos.copy())
+            collided = collided or info["collision"]
+            reached = reached or info["reached"]
+            if term or trunc:
+                break
+        if reached and not collided:
+            traj = np.array(xs)
+            statics = [(x, y, r) for (x, y, r, vx, vy) in obst if vx == 0 and vy == 0]
+            start, goal = s0, g
+            break
+    env.close()
+
+    fig, ax = plt.subplots(figsize=(6, 6))
+    s = env.cfg.arena_size_m / 2.0
+    ax.add_patch(plt.Rectangle((-s, -s), 2 * s, 2 * s, fill=False, ec="#555", lw=2))
+    for (x, y, r) in statics:
+        ax.add_patch(plt.Circle((x, y), r, color="#2c66c4", alpha=0.85))
+    ax.plot(traj[:, 0], traj[:, 1], color="#1f9d3a", lw=2.2, label="expert path (A*)")
+    ax.plot(*start, marker="o", ms=11, color="#1f9d3a", mec="k", label="start")
+    ax.plot(*goal, marker="*", ms=20, color="#f2c200", mec="k", label="goal")
+    ax.set_xlim(-s - 0.5, s + 0.5); ax.set_ylim(-s - 0.5, s + 0.5)
+    ax.set_aspect("equal"); ax.set_xticks([]); ax.set_yticks([])
+    ax.set_title("M1b — privileged A* teacher: a collision-free demonstration")
+    ax.legend(loc="upper left", fontsize=9, framealpha=0.9)
+    out = outdir / "fig_expert_trajectory.png"
+    fig.savefig(out)
+    plt.close(fig)
+    milestone_readme(
+        outdir,
+        "M1b — privileged A* teacher + imitation dataset",
+        [
+            "A* planner on an inflated occupancy grid + pure-pursuit + defensive braking.",
+            "~100% static-obstacle avoidance; residual failures are dynamic crossings.",
+            "13k+ clean (obs,action) demo steps collected from successful episodes.",
+            "`fig_expert_trajectory.png` — one collision-free run from start to goal.",
+            "See docs/debug-log/2026-07-17_expert-tuning-collisions.md for the full saga.",
+        ],
+        "2026-07-17",
+    )
+    print("wrote", out.relative_to(ROOT))
+
+
 def milestone_readme(outdir: Path, title: str, bullets: list[str], date: str) -> Path:
     p = outdir / "README.md"
     lines = [f"# {title}", "", f"_Archived {date}_", ""]
@@ -199,4 +261,4 @@ def build_m0():
 
 if __name__ == "__main__":
     which = sys.argv[1].lower() if len(sys.argv) > 1 else "m0"
-    {"m0": build_m0, "m1": build_m1}[which]()
+    {"m0": build_m0, "m1": build_m1, "m1b": build_m1b}[which]()

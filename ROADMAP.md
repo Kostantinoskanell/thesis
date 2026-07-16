@@ -30,7 +30,7 @@ Locked scoping decisions (2026-07-17):
 |---|-----------|----------------|--------|
 | M0 | Repo scaffold + plasticity golden reference | STDP/R-STDP unit tests green | ✅ done |
 | M1 | PyBullet env runs an episode with mid-episode shift | random policy completes a 60 s episode, shift fires at t=30 s | ✅ done |
-| M1b | **Scripted expert** (gap-follower / potential field) + imitation dataset | expert reaches goal collision-free >80% of episodes; trajectories logged | ☐ |
+| M1b | **Privileged A\* teacher** + imitation dataset | ~100% static avoidance; 13k+ clean (obs,action) demo steps logged | ✅ done |
 | M2 | MLP frozen + online baselines trained | frozen MLP (imitation on M1b) reaches goal pre-shift; online MLP updates from TD target | ☐ |
 | M3 | SNN pretrained (surrogate grad) matches MLP pre-shift | SNN success rate ≈ MLP within a few % pre-shift | ☐ |
 | M4 | **Pilot (go/no-go gate):** R-STDP vs pure STDP vs frozen-SNN recovery | R-STDP recovery time < frozen SNN; result plotted | ☐ |

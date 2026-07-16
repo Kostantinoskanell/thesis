@@ -28,7 +28,11 @@ class NavConfig:
     lidar_max_range_m: float = 8.0
     n_static_obstacles: int = 8
     n_dynamic_obstacles: int = 3
-    dynamic_speed_range: tuple[float, float] = (0.3, 1.0)
+    # Capped below the robot's 0.6 m/s forward speed so evasion is always
+    # kinematically possible (a faster obstacle can catch the robot from behind,
+    # making some collisions unavoidable for ANY controller and compressing the
+    # inter-controller differences the thesis measures). See debug-log entry.
+    dynamic_speed_range: tuple[float, float] = (0.2, 0.5)
     episode_len_s: float = 60.0
     shift_time_s: float = 30.0          # distribution shift injected here
     control_hz: float = 20.0
@@ -61,6 +65,7 @@ class NavEnv:
         self.t = 0.0
         self._shifted = False
         self._prev_goal_dist = None
+        self.last_collision_kind = None
         self.dt = 1.0 / self.cfg.control_hz
 
     # -- lifecycle -------------------------------------------------------
@@ -121,6 +126,7 @@ class NavEnv:
         terminated = bool(collided or reached)
         truncated = self.t >= self.cfg.episode_len_s
         info = {"collision": collided, "reached": reached,
+                "collision_kind": self.last_collision_kind,
                 "phase": 2 if self._shifted else 1, "t": self.t}
         return obs, reward, terminated, truncated, info
 
@@ -289,12 +295,34 @@ class NavEnv:
         return float(np.hypot(lin[0], lin[1])), float(ang[2])
 
     def _check_collision(self) -> bool:
-        bodies = set(self.wall_ids) | set(self.obstacles) | {d["id"] for d in self.dynamic}
+        static_b = set(self.wall_ids) | set(self.obstacles)
+        dyn_b = {d["id"] for d in self.dynamic}
+        self.last_collision_kind = None
         for c in self._p.getContactPoints(bodyA=self.robot):
-            if c[2] in bodies:   # c[2] = bodyUniqueIdB
+            b = c[2]             # c[2] = bodyUniqueIdB
+            if b in dyn_b:
+                self.last_collision_kind = "dynamic"
+                return True
+            if b in static_b:
+                self.last_collision_kind = "static"
                 return True
         return False
 
     def _goal_distance(self) -> float:
         pos, _ = self._robot_pose()
         return float(np.linalg.norm(self.goal - pos))
+
+    # -- privileged state (for the teacher/expert only, never the SNN/MLP) ----
+    def privileged_state(self):
+        """Ground-truth pose, goal, and obstacle discs. Used by the A* teacher to
+        generate imitation demonstrations; the learned controllers never see this."""
+        p = self._p
+        pos, yaw = self._robot_pose()
+        obst = []  # (x, y, radius, vx, vy) — static have zero velocity
+        for bid in self.obstacles:
+            (x, y, _), _ = p.getBasePositionAndOrientation(bid)
+            obst.append((x, y, self.OBST_RADIUS, 0.0, 0.0))
+        for d in self.dynamic:
+            (x, y, _), _ = p.getBasePositionAndOrientation(d["id"])
+            obst.append((x, y, self.OBST_RADIUS, d["vel"][0], d["vel"][1]))
+        return pos, yaw, self.goal.copy(), obst
