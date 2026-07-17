@@ -30,3 +30,12 @@ real layer, fine as a placeholder so the pipeline isn't blocked.
 "Use a pretrained RL policy" assumes the artifact + matching model are downloadable.
 For quadrupeds on Windows they largely aren't — budget for either a model-based
 controller (MPC) or a Linux/GPU training pipeline before committing.
+
+## CORRECTION (same day)
+"Unavailable" was too strong — it applies only to *downloadable pretrained* policies.
+The machine has an **RTX 4060 + WSL2 Ubuntu already installed**, and GPU CUDA passthrough
+into WSL2 is verified (`nvidia-smi` works inside Ubuntu). So the SOTA RL path is feasible:
+**train** a Go2 velocity policy in WSL2 (JAX/MJX MuJoCo Playground on the 4060), **export**
+the (small MLP) weights, and **deploy** the forward pass in our Windows MuJoCo loop —
+JAX only at train time. Chosen plan. (The M1 Mac + UTM Linux is NOT usable: no NVIDIA
+CUDA on Apple silicon.)
