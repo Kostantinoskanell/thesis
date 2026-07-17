@@ -64,7 +64,7 @@ stand, policy to walk). See [docs/references/locomotion.md](docs/references/loco
 | # | Milestone | Exit criterion | Status |
 |---|-----------|----------------|--------|
 | D1 | Go2 stands in MuJoCo under PD (full dynamics) | height holds ~0.26 m, no collapse; render + stability plot | ✅ done (`archive/P1_go2_mujoco/`) |
-| D2 | Go2 walks via a **trained RL velocity policy** | tracks [vx,ω] stably; walking GIF + tracking graph | 🔟 in progress — CPG interim works (`archive/D2_go2_walk/`); building the RL policy: **train in WSL2 (JAX/MJX MuJoCo Playground) on the RTX 4060, export MLP, deploy in the Windows MuJoCo loop** (GPU passthrough verified). No pretrained artifact existed, so we train our own |
+| D2 | Quadruped walks via a **trained RL velocity policy** | tracks [vx,ω] stably; walking GIF + tracking graph | ✅ done — PPO trained in MuJoCo Playground on the RTX 4060 (WSL2), 200M steps, reward 29.3; **cmd 1.0→actual 0.95 m/s, upright** (`archive/D2_go2_rl/`). NB it's **Go1** (Playground has no Go2); Go2-model port is later polish |
 | D3 | MuJoCo nav env (Go2 + LiDAR raycast + obstacles + mid-episode shift + reward) | dynamic replacement for `nav_env`; A* teacher re-run → demos re-collected on dynamics | ☐ |
 
 Then M2–M8 (below) run on the D3 dynamic env. Real-Go2 deploy (SDK sport mode) is a
