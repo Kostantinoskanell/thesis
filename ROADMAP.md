@@ -49,6 +49,21 @@ GIF (`scripts/render_episode.py`) and a diagnostic plot — saved to `archive/`,
 document the journey and to *verify behaviour by eye* (watching the robot catches bugs
 metrics hide).
 
+## Platform track (Go2 quadruped) — PARALLEL, decoupled from the science
+
+The SNN's `[vx, vy, omega]` interface is unchanged; a locomotion layer walks the robot.
+Runs in parallel with M2–M8 (which use the fast kinematic model) — for realistic visuals
+and a final integrated/hardware demo. See [docs/references/locomotion.md](docs/references/locomotion.md).
+
+| # | Milestone | Exit criterion | Status |
+|---|-----------|----------------|--------|
+| P1 | Quadruped (A1 URDF) walks in PyBullet from velocity commands | ✅ done — CPG trot tracks [vx,ω], stays upright; GIF + gait-diagnostics graph in `archive/P1_quadruped/` (convex-MPC is the tracking-fidelity upgrade) | ✅ |
+| P2 | Swap in Go2 URDF; nav env drives the walking robot's base | SNN action → velocity → gait; obstacle-avoidance episode renders with legs | ☐ |
+| P3 | Real-Go2 deploy interface (unitree_sdk2 sport mode) | SNN velocity commands drive the physical Go2 (hardware demo) | ☐ |
+
+**Sequencing:** science stays on the critical path (M2 next). P1 can start whenever a
+compelling walking visual is wanted; it does not gate the plasticity results.
+
 ## Open technical risks (revisit each milestone)
 
 - **STDP destroys the pretrained policy.** The "release to plasticity" step may

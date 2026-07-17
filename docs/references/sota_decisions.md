@@ -46,12 +46,25 @@ adaptive threshold), which give the network longer temporal memory. If we adopt 
 
 ---
 
-## D3. Robot model: kinematic unicycle  vs  wheeled URDF (dynamics)
+## D3. Robot platform: kinematic unicycle  vs  Unitree Go2 (RESOLVED — Go2, two-layer)
 
-**Current:** kinematic unicycle (M1) — chosen for robustness while bootstrapping.
-**SOTA/realism:** a full wheeled URDF with motor dynamics + wheel friction is more
-physically faithful and matches the "changing friction" adaptation literature. **Upgrade
-after M4** once the science is validated (don't pay the tuning cost before the pilot).
+**Decision:** target the **Unitree Go2** quadruped (user has one) via a **two-layer,
+decoupled** design:
+- High-level: the SNN outputs velocity commands `[vx, vy, omega]` (unchanged interface).
+- Low-level (sim): a convex-MPC locomotion controller walks the robot in PyBullet
+  (prototype with the built-in A1 URDF; swap Go2 URDF later). See
+  [locomotion.md](locomotion.md).
+- Low-level (real): the Go2's onboard SDK sport mode walks it from the same velocity
+  commands — no custom gait deployed to hardware.
+
+**Why decoupled:** legged locomotion is a separate hard problem, orthogonal to the
+neuromorphic-plasticity contribution. The plasticity science (M2–M8) stays on the fast
+kinematic model; the Go2 layer is for realistic visuals + a final integrated/hardware
+demo. This is the "Platform track" (P1–P3) in ROADMAP.md.
+
+**Not chosen:** implementing/​training a learned locomotion policy ourselves (Isaac Lab /
+unitree_rl_gym) — that would be a whole second thesis and the real Go2 already walks
+itself.
 
 ---
 

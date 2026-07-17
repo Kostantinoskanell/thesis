@@ -406,17 +406,33 @@ All experiments run in PyBullet \cite{coumans2021}, a real-time physics simulati
 library. The scenario:
 
 \begin{itemize}[leftmargin=*, itemsep=2pt]
-  \item \textbf{Robot:} Differential-drive ground vehicle with 360° LiDAR (32 beams,
+  \item \textbf{Robot:} Ground robot with 360° LiDAR (32 beams,
         8\,m range) and an IMU. The observation space is deliberately kept flat and
         non-spatial (LiDAR ranges + pose/velocity) to justify the MLP inductive bias
         (Section~\ref{sec:baselines}); no camera is used.
   \item \textbf{Environment:} Enclosed arena ($10 \times 10$\,m) with randomized static
-        obstacles (boxes, cylinders) and dynamic obstacles (moving at 0.3--1.0\,m/s).
+        obstacles (boxes, cylinders) and dynamic obstacles moving at 0.2--0.5\,m/s,
+        i.e.\ below the robot's forward speed so that evasion is always kinematically
+        possible (a faster obstacle could catch the robot from behind, making some
+        collisions unavoidable for \emph{any} controller and compressing the
+        inter-controller differences the study measures).
   \item \textbf{Task:} Reach a goal position without collision. Episode length: 60\,s.
   \item \textbf{Environment shift:} At $t = 30$\,s, the obstacle density doubles and
         three new dynamic obstacles are injected. This is the critical test of
         adaptivity.
 \end{itemize}
+
+\paragraph{Two-layer control and robot platform.}
+The neural controller is the \emph{high-level navigator}: it maps sensor observations
+to a body-velocity command $[v_x,\,v_y,\,\omega]$ (realized as the discrete actions
+forward/left/right/brake). This interface is platform-agnostic and decouples the
+navigation contribution from low-level actuation. The core comparative study runs on a
+fast kinematic-unicycle model for statistical throughput. For realistic validation and
+a hardware demonstration, the same velocity commands drive a \textbf{Unitree Go2}
+quadruped: in simulation via a convex-MPC locomotion controller, and on the physical
+robot via the onboard SDK's velocity-command (``sport'') mode---so no bespoke gait is
+deployed to hardware. The locomotion layer is developed in parallel and does not affect
+the plasticity results.
 
 \subsection{The Key Experiment: Online Adaptation Under Distribution Shift}
 
