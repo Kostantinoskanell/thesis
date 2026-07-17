@@ -48,6 +48,8 @@ def main():
     )
     train_kwargs = {k: v for k, v in cfg.items() if k != "network_factory"}
 
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
     steps, rewards = [], []
     t0 = time.time()
 
@@ -55,6 +57,12 @@ def main():
         r = float(metrics.get("eval/episode_reward", float("nan")))
         steps.append(int(step)); rewards.append(r)
         print(f"[{time.time() - t0:6.0f}s] step {step:>11}: eval_reward {r:8.3f}", flush=True)
+        json.dump({"steps": steps, "reward": rewards, "env": args.env},
+                  open(str(out) + ".curve.json", "w"))
+
+    def save_ckpt(step, make_policy, params):
+        # Checkpoint every eval so a partial policy always survives (long run).
+        model.save_params(str(out), params)
 
     print(f"training {args.env}: num_envs={cfg.num_envs} timesteps={cfg.num_timesteps}", flush=True)
     make_inference_fn, params, _ = ppo.train(
@@ -63,15 +71,12 @@ def main():
         network_factory=network_factory,
         wrap_env_fn=wrapper.wrap_for_brax_training,
         progress_fn=progress,
+        policy_params_fn=save_ckpt,
         seed=0,
         **train_kwargs,
     )
 
-    out = Path(args.out)
-    out.parent.mkdir(parents=True, exist_ok=True)
     model.save_params(str(out), params)
-    json.dump({"steps": steps, "reward": rewards, "env": args.env},
-              open(str(out) + ".curve.json", "w"))
     print(f"SAVED {out}  (final eval_reward {rewards[-1]:.3f})", flush=True)
 
 
