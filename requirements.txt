@@ -5,7 +5,8 @@
 numpy>=1.26,<2.3
 torch>=2.2            # install the CUDA build matching your GPU from pytorch.org
 snntorch>=0.9
-pybullet>=3.2.6
+mujoco>=3.10          # primary physics engine (Go2, full dynamics); pip wheel, no compiler
+pybullet>=3.2.6       # legacy kinematic prototype env (fast fallback)
 stable-baselines3>=2.3
 gymnasium>=0.29
 wandb>=0.17           # experiment tracking (proposal Sec. 4.4)

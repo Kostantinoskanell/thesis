@@ -49,20 +49,29 @@ GIF (`scripts/render_episode.py`) and a diagnostic plot — saved to `archive/`,
 document the journey and to *verify behaviour by eye* (watching the robot catches bugs
 metrics hide).
 
-## Platform track (Go2 quadruped) — PARALLEL, decoupled from the science
+## ⚙️ ENGINE PIVOT (2026-07-17): MuJoCo + Go2, full dynamics EVERYWHERE
 
-The SNN's `[vx, vy, omega]` interface is unchanged; a locomotion layer walks the robot.
-Runs in parallel with M2–M8 (which use the fast kinematic model) — for realistic visuals
-and a final integrated/hardware demo. See [docs/references/locomotion.md](docs/references/locomotion.md).
+Decided with the user: retire the kinematic unicycle; the **entire** thesis runs on the
+**official MuJoCo Go2 model with real rigid-body dynamics** (user has a Go2 in the lab).
+Two-layer: a **pretrained RL locomotion policy** walks the Go2 tracking `[vx, vy, omega]`;
+the SNN navigator commands velocities on top. This makes the dynamics foundation a
+**prerequisite** for the science (M2–M8 now run on the dynamic Go2), not a parallel
+decoupled track. PyBullet kinematic env (M1/M1b) retained only as a fast prototype/fallback.
+Engine verified: MuJoCo 3.10 loads+renders the Go2 on Windows; torque actuators (PD to
+stand, policy to walk). See [docs/references/locomotion.md](docs/references/locomotion.md).
 
+### Dynamics foundation (MuJoCo Go2) — now on the critical path, BEFORE M2
 | # | Milestone | Exit criterion | Status |
 |---|-----------|----------------|--------|
-| P1 | Quadruped (A1 URDF) walks in PyBullet from velocity commands | ✅ done — CPG trot tracks [vx,ω], stays upright; GIF + gait-diagnostics graph in `archive/P1_quadruped/` (convex-MPC is the tracking-fidelity upgrade) | ✅ |
-| P2 | Swap in Go2 URDF; nav env drives the walking robot's base | SNN action → velocity → gait; obstacle-avoidance episode renders with legs | ☐ |
-| P3 | Real-Go2 deploy interface (unitree_sdk2 sport mode) | SNN velocity commands drive the physical Go2 (hardware demo) | ☐ |
+| D1 | Go2 stands in MuJoCo under PD (full dynamics) | height holds ~0.26 m, no collapse; render + stability plot | ✅ done (`archive/P1_go2_mujoco/`) |
+| D2 | Go2 walks via **pretrained RL velocity policy** | tracks [vx,ω] stably over long episodes; walking GIF + tracking graph | ☐ |
+| D3 | MuJoCo nav env (Go2 + LiDAR raycast + obstacles + mid-episode shift + reward) | dynamic replacement for `nav_env`; A* teacher re-run → demos re-collected on dynamics | ☐ |
 
-**Sequencing:** science stays on the critical path (M2 next). P1 can start whenever a
-compelling walking visual is wanted; it does not gate the plasticity results.
+Then M2–M8 (below) run on the D3 dynamic env. Real-Go2 deploy (SDK sport mode) is a
+final integrated/hardware demo after the science.
+
+**Superseded:** the PyBullet A1 CPG walk (old "P1", `archive/P1_quadruped/`) — kept as a
+reference artifact; MuJoCo Go2 + RL policy replaces it.
 
 ## Open technical risks (revisit each milestone)
 

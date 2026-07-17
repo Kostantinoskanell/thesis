@@ -17,6 +17,8 @@ fpga/**/*.log
 fpga/**/vivado*/
 *.bit
 *.hwh
+# vendored robot assets (fetched via scripts/fetch_go2_model.sh; has its own .git)
+assets/mujoco_menagerie/
 # OS / editor
 .DS_Store
 *.swp
