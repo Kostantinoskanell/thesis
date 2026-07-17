@@ -133,13 +133,27 @@ class Go2RLWalker:
 
     # -- rendering -----------------------------------------------------------
 
-    def render(self, w=480, h=360, cam_dist=1.8, azimuth=130, elevation=-20):
+    def render(self, w=480, h=360, cam_dist=1.8, azimuth=130, elevation=-20,
+               show_collision=False):
+        """Render one frame. show_collision=True overlays the collision geometry
+        (robot collision capsules = geom group 3, obstacle/wall collision geoms =
+        group 4) and contact points/forces, so you can see the actual collision
+        boxes and where contacts happen -- useful for verifying the moving
+        obstacles and near-misses."""
         if self._renderer is None:
             self._renderer = mujoco.Renderer(self.model, height=h, width=w)
         cam = mujoco.MjvCamera()
         cam.lookat[:] = self.data.qpos[:3]
         cam.distance, cam.azimuth, cam.elevation = cam_dist, azimuth, elevation
-        self._renderer.update_scene(self.data, camera=cam)
+        opt = None
+        if show_collision:
+            opt = mujoco.MjvOption()
+            opt.geomgroup[3] = 1     # robot collision primitives (normally hidden)
+            opt.geomgroup[4] = 1     # obstacle + wall collision geoms
+            opt.flags[mujoco.mjtVisFlag.mjVIS_CONTACTPOINT] = True
+            opt.flags[mujoco.mjtVisFlag.mjVIS_CONTACTFORCE] = True
+            opt.flags[mujoco.mjtVisFlag.mjVIS_TRANSPARENT] = True  # see boxes through meshes
+        self._renderer.update_scene(self.data, camera=cam, scene_option=opt)
         return self._renderer.render()
 
     def close(self):

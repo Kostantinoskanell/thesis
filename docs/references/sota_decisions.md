@@ -248,5 +248,33 @@ upgrade — SOTA *and* fair, symmetric across controllers.
 
 ---
 
+## D8. R-STDP third factor: raw reward  vs  reward-prediction error (RPE)  (RESOLVED — RPE, raw kept as ablation)
+
+**Question raised (M4 pilot):** what signal should modulate the R-STDP eligibility trace?
+
+**Decision:** **reward-prediction error `r - r̄`** (r̄ = EMA baseline), i.e. dopamine-style
+baseline subtraction, as the default third factor. Raw env reward kept selectable as an
+ablation (`reward_mode="raw"`).
+
+**Why it's likely necessary, not cosmetic:** the env reward is progress-to-goal, which is
+**almost always slightly positive**. Raw-reward R-STDP then *uniformly potentiates*
+whatever the network just did every step — it can't distinguish a good action from a
+slightly-worse one, so it drifts rather than improves. Subtracting a running baseline
+makes plasticity potentiate only **better-than-expected** outcomes and depress
+worse-than-expected — the standard modern three-factor / neuromodulated-plasticity
+formulation (dopamine RPE, Schultz).
+
+**Also fairer:** the online-MLP baseline (D7) already uses an advantage (value-subtracted)
+signal via its critic. Raw-reward R-STDP vs advantage-MLP would be an unfair mismatch;
+RPE puts both adaptive controllers on a baseline-subtracted footing. Same strong-and-fair
+test as D7.
+
+**Cost:** one EMA scalar per controller (`rpe_alpha`), computed at consolidation in
+`SNNController.learn`. STDPConfig (the FPGA golden reference) is untouched — RPE is a
+controller-level modulation of the scalar third factor, so the hardware datapath is
+unchanged. Implemented; raw is the ablation for the writeup ("why RPE was needed").
+
+---
+
 _Update this log whenever a new SOTA option is identified. Every "we chose the simpler
 thing" must have an entry saying why and when to revisit._

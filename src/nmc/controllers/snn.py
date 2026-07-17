@@ -135,7 +135,10 @@ class LIFNet(nn.Module):
 
 class SNNController:
     def __init__(self, net: "LIFNet", plasticity_enabled: bool = True,
-                 stdp_cfg: STDPConfig | None = None, device: str = "cpu"):
+                 stdp_cfg: STDPConfig | None = None, device: str = "cpu",
+                 reward_mode: str = "raw", rpe_alpha: float = 0.02,
+                 gate_threshold: float = 0.0, critic_lr: float = 0.05,
+                 gamma: float = 0.97):
         self.net = net.to(device)
         self.device = device
         self.plasticity_enabled = plasticity_enabled
@@ -147,21 +150,91 @@ class SNNController:
         self.learner = STDPLearner(n_pre=w.shape[1], n_post=w.shape[0], cfg=cfg)
         self._last_hidden_spikes = None
         self._last_out_spikes = None
+        # Third-factor signal. "raw" = env reward directly. "rpe" = reward-
+        # prediction error r - r_bar (r_bar an EMA), i.e. dopamine-style
+        # baseline subtraction: potentiate only BETTER-than-expected outcomes,
+        # depress worse. Necessary because the env's progress reward is almost
+        # always slightly positive (raw reward -> uniform potentiation). Also
+        # puts R-STDP on the same baseline-subtracted footing as the online-MLP's
+        # advantage update (fair comparison). See sota_decisions D8.
+        self.reward_mode = reward_mode
+        self.rpe_alpha = rpe_alpha
+        self.gate_threshold = gate_threshold
+        self._r_bar = 0.0
+        # "td" third factor: a linear critic V(obs) provides a value estimate so the
+        # modulator becomes the TD error delta = r + gamma*V(s') - V(s) -- what
+        # dopamine actually encodes (Schultz), and the signal quality the online-MLP
+        # gets from its critic. The critic is a separate value system (keeps the
+        # R-STDP weight update local); learned online by semi-gradient TD. See D8.
+        self.critic_lr = critic_lr
+        self.gamma = gamma
+        self._wv = None      # critic weights, lazily sized to the observation
+        self._bv = 0.0
+        self._cur_obs = None
+        # Diagnostics: how often the gate opens + cumulative weight drift.
+        self.n_learn = 0
+        self.n_gate_open = 0
+        self._W0 = self.W.copy()
 
-    def act(self, x_seq: torch.Tensor) -> int:
+    def _value(self, obs):
+        if self._wv is None:
+            self._wv = np.zeros(obs.shape[0], dtype=np.float64)
+        return float(self._wv @ obs + self._bv)
+
+    def act(self, x_seq: torch.Tensor, obs=None) -> int:
+        self._cur_obs = None if obs is None else np.asarray(obs, dtype=np.float64)
         out_sum, all_spikes = self.net(x_seq)
-        # cache mean spike vectors over the encoding window for the plasticity step
-        last = all_spikes[-1]
-        self._last_hidden_spikes = last[-2].detach().cpu().numpy().ravel()
-        self._last_out_spikes = last[-1].detach().cpu().numpy().ravel()
+        # Cache the FULL within-window spike trains of the last-hidden (presynaptic
+        # to the readout) and output (postsynaptic) layers, so the plasticity step
+        # can replay the T timesteps and use the actual spike timing -- not just the
+        # final timestep. B=1 in closed loop.
+        self._win_hidden = [s[-2].detach().cpu().numpy().ravel() for s in all_spikes]
+        self._win_out = [s[-1].detach().cpu().numpy().ravel() for s in all_spikes]
         return self.net.decode(out_sum)
 
-    def learn(self, reward: float = 0.0):
-        """Apply one (R-)STDP update from the cached spikes + reward."""
-        if not self.plasticity_enabled or self._last_out_spikes is None:
+    def learn(self, reward: float = 0.0, next_obs=None, done: bool = False):
+        """One R-STDP decision update: accumulate the Hebbian eligibility across the
+        T-step window (reward=0, weights unchanged), then consolidate the whole
+        accumulated eligibility with the global third factor. Faithful three-factor
+        rule (proposal Eq. rstdp); pure STDP (reward_modulated=False) applies the
+        Hebbian term per step."""
+        if not self.plasticity_enabled or not getattr(self, "_win_out", None):
             return
-        self.learner.step(self.W, self._last_hidden_spikes, self._last_out_spikes, reward=reward)
-        # write updated weights back into the torch layer
+        # Third factor: raw reward | reward-prediction error | TD error.
+        if self.reward_mode == "td":
+            s = self._cur_obs
+            if s is not None and self._wv is None:
+                self._wv = np.zeros(s.shape[0], dtype=np.float64)
+            v_s = self._value(s) if s is not None else 0.0
+            if done or next_obs is None:
+                v_ns = 0.0
+            else:
+                v_ns = self._value(np.asarray(next_obs, dtype=np.float64))
+            modulator = reward + self.gamma * v_ns - v_s
+            if s is not None:                        # semi-gradient TD critic update
+                self._wv += self.critic_lr * modulator * s
+                self._bv += self.critic_lr * modulator
+        elif self.reward_mode == "rpe":
+            modulator = reward - self._r_bar
+            self._r_bar += self.rpe_alpha * (reward - self._r_bar)
+        else:
+            modulator = reward
+        # Neuromodulatory GATE ("learn only when surprised"): while the policy is
+        # doing about as expected (|RPE| small), suppress the weight update so
+        # plasticity doesn't drift a good policy (stability-plasticity dilemma).
+        # A real perturbation (shift -> collisions / lost progress) produces a
+        # large |RPE| that opens the gate. gate_threshold=0 disables gating.
+        self.n_learn += 1
+        if self.gate_threshold > 0.0 and abs(modulator) < self.gate_threshold:
+            modulator = 0.0
+        else:
+            self.n_gate_open += 1
+        zero_pre = np.zeros(self.W.shape[1])
+        zero_post = np.zeros(self.W.shape[0])
+        for h, o in zip(self._win_hidden, self._win_out):
+            self.learner.step(self.W, h, o, reward=0.0)   # accumulate eligibility
+        if self.learner.cfg.reward_modulated:
+            self.learner.step(self.W, zero_pre, zero_post, reward=modulator)  # consolidate
         with torch.no_grad():
             self.net.fc[-1].weight.copy_(torch.as_tensor(self.W, dtype=self.net.fc[-1].weight.dtype))
 
@@ -182,7 +255,9 @@ class SNNNavController:
 
     def __init__(self, net: "LIFNet", n_steps: int = 20,
                  plasticity_enabled: bool = False, stdp_cfg: "STDPConfig | None" = None,
-                 device: str = "cpu", seed: int = 0):
+                 device: str = "cpu", seed: int = 0,
+                 reward_mode: str = "raw", rpe_alpha: float = 0.02,
+                 gate_threshold: float = 0.0):
         import numpy as _np
         self.net = net.to(device)
         self.net.eval()
@@ -191,7 +266,9 @@ class SNNNavController:
         self.plasticity_enabled = plasticity_enabled
         self.rng = _np.random.default_rng(seed)
         self.core = (SNNController(net, plasticity_enabled=True, stdp_cfg=stdp_cfg,
-                                   device=device) if plasticity_enabled else None)
+                                   device=device, reward_mode=reward_mode,
+                                   rpe_alpha=rpe_alpha, gate_threshold=gate_threshold)
+                     if plasticity_enabled else None)
         # Spike-activity accounting (energy proxy / H2 preview): total emitted
         # spikes and total neuron-steps, accumulated across act() calls.
         self.total_spikes = 0.0
@@ -203,7 +280,7 @@ class SNNNavController:
         raster = encode_nav_obs(obs, self.n_steps, rng=self.rng)     # (T, F)
         x_seq = torch.as_tensor(raster, device=self.device).unsqueeze(1)  # (T, 1, F)
         if self.plasticity_enabled:
-            return self.core.act(x_seq)
+            return self.core.act(x_seq, obs=obs)
         with torch.no_grad():
             out_sum, all_spikes = self.net(x_seq)
         for step in all_spikes:
@@ -223,4 +300,4 @@ class SNNNavController:
     def observe(self, reward: float, next_obs, done: bool):
         """No-op when frozen; one R-STDP update when plasticity is enabled (M4)."""
         if self.plasticity_enabled:
-            self.core.learn(reward)
+            self.core.learn(reward, next_obs=next_obs, done=done)

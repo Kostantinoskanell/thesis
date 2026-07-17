@@ -40,8 +40,12 @@ def main():
     # Default 30 s often ends before the shift fires (teacher is good); pull it
     # forward for the demo so the injection is visible in the GIF.
     ap.add_argument("--shift-time", type=float, default=30.0)
+    ap.add_argument("--show-collision", action="store_true",
+                    help="overlay collision geometry (robot capsules + obstacle/wall "
+                         "boxes) and contact points")
     args = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
+    gif_name = "nav_episode_collision.gif" if args.show_collision else "nav_episode.gif"
 
     env = Go2NavEnv(Go2NavConfig(seed=args.seed, shift_time_s=args.shift_time))
     # Inflation sized for the Go2 footprint (bounding circle 0.45 m + margin),
@@ -66,7 +70,8 @@ def main():
         times.append(info["t"])
         if step % args.gif_every == 0:
             frames.append(Image.fromarray(env.render(w=480, h=360, cam_dist=4.5,
-                                                     azimuth=90, elevation=-40)))
+                                                     azimuth=90, elevation=-40,
+                                                     show_collision=args.show_collision)))
             if info["phase"] == 2 and shift_frame is None:
                 shift_frame = len(frames) - 1
         if info["phase"] == 2 and 2 not in obst_snapshots:
@@ -82,7 +87,7 @@ def main():
                f"COLLIDED({info['collision_kind']})" if info["collision"] else "TIMEOUT")
     print(f"episode: {verdict} at t={info['t']:.1f}s  steps={step}  phase={info['phase']}")
 
-    gif = OUT / "nav_episode.gif"
+    gif = OUT / gif_name
     frames[0].save(gif, save_all=True, append_images=frames[1:], duration=100, loop=0)
     print(f"wrote {gif} ({len(frames)} frames, shift at frame {shift_frame})")
 
