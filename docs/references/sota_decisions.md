@@ -34,15 +34,42 @@ story (three-factor local rule on a crossbar) fully intact.
 
 **Cost:** e-prop needs a per-neuron learning signal (a small extra broadcast vector) and
 the surrogate-derivative eligibility form — modest software work, ~1 extra register/PE
-in hardware. **Decision needed from advisor/student before M4.**
+in hardware.
+
+**Decision (2026-07-17): keep R-STDP primary for M4; add e-prop as a second three-factor
+instance in M5, NOT before the pilot.** Reasoning: (1) M4 is the go/no-go gate that tests
+whether reward-modulated plasticity works at all — that is the thesis's core claim and
+must be tested cleanly on the memristor-native rule (R-STDP) first. (2) e-prop's
+*per-neuron* learning signal is less memristor-crossbar-native than R-STDP's single
+*global* reward broadcast, so making e-prop primary would partially undercut RQ2/RQ3 (the
+FPGA/hardware contribution). (3) Rushing a large e-prop implementation in before M4 risks
+delaying the pivotal experiment. The three-factor framing (this entry) is preserved: the
+same eligibility-trace datapath serves both, so e-prop enters as a learning-power
+reference in the M5 full comparison once R-STDP is proven. ALIF (D2) — the neuron model
+e-prop would use — is adopted now, so the substrate is already e-prop-ready.
 
 ---
 
-## D2. LIF neuron model: vanilla LIF  vs  adaptive LIF (ALIF)
+## D2. LIF neuron model: vanilla LIF  vs  adaptive LIF (ALIF)  (RESOLVED — ALIF adopted for M3)
 
 **SOTA:** e-prop's headline results use **adaptive LIF** (ALIF) neurons (with an
-adaptive threshold), which give the network longer temporal memory. If we adopt e-prop
-(D1), ALIF is the matching neuron model. Low cost in snnTorch. Consider for M3.
+adaptive threshold), which give the network longer temporal memory.
+
+**Decision (2026-07-17):** **adopt ALIF as the M3 neuron model.** Motivation is not just
+"more SOTA" — ALIF directly attacks the proposal's *own* open risk that "rate-coded LiDAR
+lacks temporal structure STDP can exploit": the spike-triggered decaying threshold gives
+each neuron memory across timesteps, so the plasticity has temporal signal to work with.
+It *strengthens* the R-STDP story rather than competing with it, and is the natural
+partner to R-STDP (unlike e-prop, D1).
+
+**Correction to the earlier note:** "low cost in snnTorch" was wrong — snnTorch has **no
+built-in ALIF** (`Leaky.learn_threshold` is a *learnable fixed* threshold, not adaptive).
+Implemented as a compact custom `ALIFCell` (Bellec et al. 2020 dynamics) in
+`src/nmc/controllers/snn.py`, drop-in via `LIFNet(neuron="alif")`, same fast-sigmoid
+surrogate, same weights/decode. Vanilla LIF kept selectable (`neuron="lif"`) as a
+one-seed reference so the LIF→ALIF benefit can be reported.
+
+**Cost:** re-pretrain M3 with ALIF (~45 min/seed on CPU). Bounded.
 
 ---
 
