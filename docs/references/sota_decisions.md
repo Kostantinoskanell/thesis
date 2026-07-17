@@ -163,9 +163,25 @@ policy) as a **documented stretch goal** for a closed-loop hardware demo near th
 (post-M9-ish, only if time remains) — it would make a substantially stronger demo, but
 must not compete with the R-STDP pilot (M4, the actual go/no-go gate) for time.
 
+**Practical field notes** (from two labmates who use the SDK, 2026-07-17):
+- Package is `unitree_sdk2_python` (import `unitree_sdk2py`); low-level = `LowState_`
+  (subscribe) / `LowCmd_` (publish) DDS topics.
+- You must write **handler/callback plumbing** to consume the DDS streams correctly —
+  it is not turnkey.
+- Keep the **official Unitree handbook** at hand: some command flags are **silently
+  ignored** by the firmware, which wastes days if you don't know which.
+- Their "sim commands run directly on the real robot" claim is optimistic: `LowState`
+  gives IMU (gyro/accel/quat), joint encoders, foot force — **not body-frame velocity**,
+  which our policy's `local_linvel` observation requires (ground-truth velocimeter in
+  MJX). Bridging needs leg-odometry/EKF estimation or retraining without that obs.
+- Confirmed by lab usage: **sport mode's built-in gait is the standard tool when the
+  work is path-planning-level** — which is exactly our SNN-navigator architecture.
+
 **Revisit when:** the M2–M8 plasticity science is done and a hardware demo slot opens up
 with time to spare; re-evaluate against how much of the FPGA track (D-track) is still
-pending at that point.
+pending at that point. Note the D2 trained Go2 policy is the exact artifact a low-level
+deployment would use — nothing in the current plan forks on this decision, so deferring
+costs nothing.
 
 ---
 
