@@ -14,5 +14,6 @@ re-solving the same problem twice.
 | 2026-07-17 | MuJoCo Go2 collapses holding home pose (torque vs position actuators) | [go2-torque-actuators](2026-07-17_go2-torque-actuators.md) |
 | 2026-07-17 | No plug-and-play pretrained RL Go2 policy on Windows/MuJoCo | [go2-locomotion-no-pretrained](2026-07-17_go2-locomotion-no-pretrained.md) |
 | 2026-07-17 | MuJoCo Playground↔MJX↔Warp version conflict (RL timebox) | [playground-mjx-warp-conflict](2026-07-17_playground-mjx-warp-conflict.md) |
+| 2026-07-17 | A* teacher freezes after shift (dense field disconnects free space) | [astar-freeze-after-shift](2026-07-17_astar-freeze-after-shift.md) |
 
 Naming convention: `YYYY-MM-DD_short-slug.md`.

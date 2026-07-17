@@ -28,6 +28,12 @@ class PrivilegedConfig:
     res_m: float = 0.2               # grid cell size
     inflate_m: float = 0.75          # static obstacle inflation: robot radius + margin
     dyn_extra_inflate_m: float = 0.15  # extra clearance for moving obstacles
+    # Progressive fallback: when the field is too dense for the safe inflation
+    # (post-shift the free space can disconnect entirely -- the planner then
+    # returned no path and the robot braked FOREVER; see debug-log
+    # 2026-07-17_astar-freeze-after-shift), retry with tighter margins before
+    # giving up. Last value should be ~ the robot's bounding radius.
+    fallback_inflations_m: tuple = ()   # empty = use (inflate_m,) only
     lookahead_m: float = 0.6         # short lookahead -> tracks corners tightly
     steer_deadband_deg: float = 8.0
     predict_times_s: tuple = (0.0, 0.3, 0.6)   # moving-obstacle sweep in A*
@@ -54,14 +60,15 @@ class PrivilegedExpert:
         return np.array([(c + 0.5) * self.cfg.res_m - self.s,
                          (r + 0.5) * self.cfg.res_m - self.s])
 
-    def _occupancy(self, obst):
+    def _occupancy(self, obst, inflate_m: float | None = None):
+        base_infl = self.cfg.inflate_m if inflate_m is None else inflate_m
         occ = np.zeros((self.G, self.G), dtype=bool)
         rr, cc = np.meshgrid(np.arange(self.G), np.arange(self.G), indexing="ij")
         cx = (cc + 0.5) * self.cfg.res_m - self.s
         cy = (rr + 0.5) * self.cfg.res_m - self.s
         for (ox, oy, orad, vx, vy) in obst:
             moving = (vx * vx + vy * vy) > 1e-6
-            infl = self.cfg.inflate_m + (self.cfg.dyn_extra_inflate_m if moving else 0.0)
+            infl = base_infl + (self.cfg.dyn_extra_inflate_m if moving else 0.0)
             rad2 = (orad + infl) ** 2
             times = self.cfg.predict_times_s if moving else (0.0,)
             for t in times:                       # block the swept future positions
@@ -144,13 +151,20 @@ class PrivilegedExpert:
         if self._dynamic_threat(pos, yaw, obst):
             return 3
 
-        occ = self._occupancy(obst)
-        start = self._to_cell(pos)
-        occ[start] = False  # never block the robot's own cell
-        path = self._astar(occ, start, self._to_cell(goal))
+        # Plan with the safe inflation; if the (possibly shifted, dense) field
+        # disconnects the free space, retry with progressively tighter margins.
+        inflations = self.cfg.fallback_inflations_m or (self.cfg.inflate_m,)
+        path = None
+        for infl in inflations:
+            occ = self._occupancy(obst, inflate_m=infl)
+            start = self._to_cell(pos)
+            occ[start] = False  # never block the robot's own cell
+            path = self._astar(occ, start, self._to_cell(goal))
+            if path:
+                break
 
         if not path:
-            return 3       # fully blocked (e.g. by a crossing obstacle): brake and wait
+            return 3       # fully blocked even at minimum margin: brake and wait
         if len(path) < 2:
             target = goal  # essentially at the goal cell already
         else:

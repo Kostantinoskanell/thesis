@@ -36,18 +36,21 @@ N_SUBSTEPS = int(round(CTRL_DT / SIM_DT))
 ACTION_SCALE = 0.5
 
 
-def _load_model() -> mujoco.MjModel:
+def _load_model(scene_xml: str | None = None) -> mujoco.MjModel:
     """Load the Playground Go2 scene exactly as base.py does in WSL: XML strings
-    + an assets dict (scene include + robot xml + menagerie meshes)."""
+    + an assets dict (scene include + robot xml + menagerie meshes).
+
+    scene_xml: optional scene XML *string* that includes go2_playground.xml
+    (e.g. the D3 nav arena); defaults to the flat-terrain training scene."""
     assets = {}
     for f in _XMLS.glob("*.xml"):
         assets[f.name] = f.read_bytes()
     for f in (_MENAGERIE_GO2 / "assets").glob("*"):
         if f.is_file():
             assets[f.name] = f.read_bytes()
-    model = mujoco.MjModel.from_xml_string(
-        (_XMLS / "scene_go2_playground_flat.xml").read_text(), assets=assets
-    )
+    if scene_xml is None:
+        scene_xml = (_XMLS / "scene_go2_playground_flat.xml").read_text()
+    model = mujoco.MjModel.from_xml_string(scene_xml, assets=assets)
     model.opt.timestep = SIM_DT
     return model
 
@@ -55,9 +58,10 @@ def _load_model() -> mujoco.MjModel:
 class Go2RLWalker:
     """Velocity-commanded Go2 (full dynamics) driven by the trained RL policy."""
 
-    def __init__(self, export_path: str | Path = _EXPORT):
+    def __init__(self, export_path: str | Path = _EXPORT,
+                 scene_xml: str | None = None):
         self.policy = NumpyGo2Policy(export_path)
-        self.model = _load_model()
+        self.model = _load_model(scene_xml)
         self.data = mujoco.MjData(self.model)
 
         key = self.model.keyframe("home")
