@@ -31,7 +31,7 @@ Locked scoping decisions (2026-07-17):
 | M0 | Repo scaffold + plasticity golden reference | STDP/R-STDP unit tests green | ✅ done |
 | M1 | PyBullet env runs an episode with mid-episode shift | random policy completes a 60 s episode, shift fires at t=30 s | ✅ done |
 | M1b | **Privileged A\* teacher** + imitation dataset | ~100% static avoidance; 13k+ clean (obs,action) demo steps logged | ✅ done |
-| M2 | MLP frozen + online baselines trained | frozen MLP (imitation on M1b) reaches goal pre-shift; online MLP updates from TD target | ☐ |
+| M2 | MLP frozen + online baselines trained | frozen MLP (imitation on M1b) reaches goal pre-shift; online MLP updates from TD target | ✅ done on the **dynamic Go2 env** — BC alone failed closed-loop (23%, covariate shift, see debug-log) → **DAgger ×2 → 33% held-out success** (bar 30%; privileged teacher: 62%). Online-TD update mechanically verified (`archive/M2_mlp_baselines_go2/`). SNN (M3) trains on `data/imitation_go2_dagger.npz` |
 | M3 | SNN pretrained (surrogate grad) matches MLP pre-shift | SNN success rate ≈ MLP within a few % pre-shift | ☐ |
 | M4 | **Pilot (go/no-go gate):** R-STDP vs pure STDP vs frozen-SNN recovery | R-STDP recovery time < frozen SNN; result plotted | ☐ |
 | M5 | Full comparison: all 5 controllers × all metrics, **≥10 seeds w/ 95% CIs** | metrics table + error bars reproduced from real runs; sig. test on recovery time | ☐ |
