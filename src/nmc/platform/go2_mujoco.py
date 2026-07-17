@@ -9,6 +9,10 @@ The Go2 Menagerie model uses TORQUE actuators (ctrlrange ~±23.7 Nm, knees ±45 
 even standing needs an active PD controller; robust walking needs the pretrained RL
 policy (next milestone). This class provides: model loading, a PD stand controller (the
 verified foundation), a base-state readout, and an offscreen renderer for GIFs.
+
+D2 update: the CPG trot in walk_step() below is superseded by the trained RL policy in
+assets/go2_policy.params (see src/nmc/rl/envs/go2/ + scripts/rl/train_go2.py) -- kept
+here as a fallback/reference gait, not the locomotion layer D3 should build on.
 """
 
 from __future__ import annotations

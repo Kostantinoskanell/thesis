@@ -10,6 +10,17 @@ The **real Unitree Go2 walks itself**: its onboard SDK "sport/high-level mode" a
 `Move(vx, vy, vyaw)`. So on hardware we send velocity commands and never deploy a custom
 gait. (unitree_sdk2 / unitree_sdk2_python.)
 
+**Alternative (deferred, see [sota_decisions.md](sota_decisions.md) D6):** the same SDK
+also exposes a **low-level** interface — `LowState_`/`LowCmd_` DDS topics (pub/sub, like
+ROS topics) — giving direct IMU + per-joint encoder readout and direct per-motor
+torque/position commands, bypassing the onboard gait firmware entirely. This is what
+would be needed to deploy *our own* trained MJX policy (D2's `Go2JoystickFlatTerrain`)
+onto real hardware, instead of Unitree's built-in walk. Not pursued now — it needs a
+state estimator (real IMU has no body-frame velocity, unlike our policy's `local_linvel`
+observation), safety watchdogs, and sim2real robustness tuning, i.e. real engineering
+scope. Logged as an end-of-thesis stretch goal for a closed-loop hardware demo, not part
+of the core deliverable.
+
 ## Sim locomotion — PyBullet-native (recommended, keeps our stack)
 - **yxyang/fast_and_efficient** — A1 in PyBullet + **convex MPC**, velocity-command
   interface. Best drop-in for our PyBullet env. https://github.com/yxyang/fast_and_efficient

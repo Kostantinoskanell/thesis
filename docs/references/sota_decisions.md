@@ -125,5 +125,49 @@ Sources: [Knowm 8-Discrete 16-DIP](https://knowm.com/products/m-sdc-memristor-8-
 
 ---
 
+## D6. Real-hardware deployment: sport-mode SDK  vs  low-level SDK (custom policy)  (DEFERRED — sport-mode primary, low-level as end-of-thesis stretch goal)
+
+**Question raised:** a classmate pointed out `unitree_sdk2_python` exposes a **low-level**
+interface — `LowState_`/`LowCmd_` DDS topics (pub/sub, analogous to ROS topics) — giving
+direct IMU + per-joint encoder readout and direct per-motor torque/position commands,
+bypassing Unitree's onboard walking firmware entirely. Should we deploy through this
+instead of sport-mode?
+
+**What each path actually does:**
+- **Sport-mode SDK** (current plan, [locomotion.md](locomotion.md), ROADMAP D2/D3): send
+  `Move(vx, vy, vyaw)`; the Go2's **own onboard gait** walks it. Our trained MuJoCo
+  Playground policy (D2, `Go2JoystickFlatTerrain`) is never touched on real hardware —
+  only the high-level SNN's velocity commands reach the robot.
+  Note: not currently exercised by any milestone — D3's real-Go2 deploy is listed as the
+      final integrated/hardware demo, after the M2–M8 science.
+- **Low-level SDK**: our own trained policy's joint targets are sent directly, at
+  control-loop rate, using real IMU/joint sensors as the observation.
+
+**Why this reopens a locked decision, not a free upgrade:** [locomotion.md](locomotion.md)
+explicitly chose sport-mode and ruled out "*implementing/training a learned locomotion
+policy ourselves — that would be a whole second thesis*." Low-level deployment requires,
+at minimum:
+- **A state estimator.** Our policy's `local_linvel` observation (D2's `go2/joystick.py`)
+  is a ground-truth MJX velocimeter reading; a real IMU only gives gyro + accelerometer,
+  not body-frame velocity — this must come from leg-odometry/EKF fusion, which does not
+  exist yet in any form here.
+- **Safety infrastructure**: torque limits, fall detection, E-stop — a real robot can be
+  damaged by an under-randomized sim2real policy.
+- **Sim2real robustness work** (more aggressive domain randomization / iterative tuning) —
+  the actual bulk of effort in papers like unitree_rl_gym / Isaac Lab Go2 (see
+  [locomotion.md](locomotion.md)'s SOTA list), not a quick add-on.
+
+**Decision:** **keep sport-mode as the real-hardware target for the thesis's core
+deliverable.** Log low-level SDK deployment (closing the sim2real loop with the D2 trained
+policy) as a **documented stretch goal** for a closed-loop hardware demo near the end
+(post-M9-ish, only if time remains) — it would make a substantially stronger demo, but
+must not compete with the R-STDP pilot (M4, the actual go/no-go gate) for time.
+
+**Revisit when:** the M2–M8 plasticity science is done and a hardware demo slot opens up
+with time to spare; re-evaluate against how much of the FPGA track (D-track) is still
+pending at that point.
+
+---
+
 _Update this log whenever a new SOTA option is identified. Every "we chose the simpler
 thing" must have an entry saying why and when to revisit._
