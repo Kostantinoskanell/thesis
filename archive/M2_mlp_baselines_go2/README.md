@@ -1,41 +1,52 @@
-# M2 — MLP baselines on the dynamic Go2 env (frozen via BC+DAgger, online-TD verified)
+# M2 — MLP baselines on the dynamic Go2 env (SOTA-upgraded: SPL, CIs, eligibility traces)
 
-_Archived 2026-07-17 · controllers 1–2 of the proposal's five, now on full dynamics._
+_Archived 2026-07-17 · controllers 1–2 of five, strong-and-fair (see
+[sota_decisions.md D7](../../docs/references/sota_decisions.md))._
 
 ## Frozen MLP (controller 1)
-Behavior cloning on D3's 15,131 A* demo steps trained to **86.5% val accuracy**
-(inverse-frequency class weights; per-class 0.79–0.93, no majority collapse:
-`fig_mlp_training.png`) — but closed-loop it scored only **23% (7/30)**: textbook
-**covariate shift** (compounding errors drift the student into undemonstrated states).
-War story: [bc-covariate-shift-dagger](../../docs/debug-log/2026-07-17_bc-covariate-shift-dagger.md).
+Behavior cloning on D3's A* demos + **DAgger** to fix covariate shift (war story:
+[bc-covariate-shift-dagger](../../docs/debug-log/2026-07-17_bc-covariate-shift-dagger.md)).
+Architecture upgraded to **512×512 + LayerNorm** (capacity parity with the LIF-SNN),
+dropout 0.1 during BC.
 
-**Fix: DAgger** (`scripts/dagger_go2.py`) — student drives, A* teacher labels every
-visited state, aggregate, retrain:
+**Evaluation is now multi-seed with confidence intervals** (5 independently-trained
+seed-models × 30 held-out episodes = 150 episodes; held-out seeds 2000+ disjoint from
+collection 1000+ and DAgger 3000+; shift disabled = pre-shift competence bar):
 
-| stage | held-out success (30 eps, seeds 2000+) |
+| metric | value |
 |---|---|
-| BC only | 23% |
-| DAgger ×2 (+41,744 labeled steps → 56,875) | **33% — PASS** (bar: 30%) |
+| success (pooled, n=150) | **37%**, Wilson-95% **[29%, 45%]** |
+| success (across-seed mean) | **37% ± 8%** (t-95%; per-seed 30/33/33/40/47%) |
+| **SPL** (Anderson 2018) | **0.346** |
+| collision rate | 55% |
+| falls | 0 |
 
-Student success *during* rollouts rose 35% → 50% across iterations; more iterations
-would likely keep helping (diminishing wall-time returns: retrain grows with dataset).
-Zero falls in every run. Teacher-with-privileged-info reference: 62%. The remaining gap
-is expected — a reactive lidar-only student vs a full-map planner.
+Passes the 30% bar. Reference: A* teacher *with privileged full-map info* = 62%. The gap
+is the expected price of a **reactive, lidar-only** student vs a global planner — SPL 0.35
+says successful runs are also reasonably direct, not lucky detours. The 512×512 arch beat
+the old 256×256 (single-seed 33% → DAgger 40%, pooled 37%).
 
-Artifacts: `fig_mlp_eval.png` (outcome fractions), `mlp_episode.gif` (successful episode),
-`assets/mlp_frozen_go2.pt` (final weights), `data/imitation_go2_dagger.npz` (aggregated
-dataset — **M3's SNN must train on this**, not the raw demos).
+Figures: `fig_mlp_training.png` (BC curve + per-class acc), `fig_mlp_eval.png` (success
+with Wilson CI + SPL; per-seed spread with t-CI band), `mlp_episode.gif` (successful run).
 
-## Online-TD MLP (controller 2)
-Mechanical property verified (`scripts/eval_mlp_go2.py`): one `observe(reward, ...)`
-call changes weights (max|ΔW| = 1e-3) with `frozen=False`, and provably does not with
-`frozen=True` (max|ΔW| = 0). The online baseline updates from **environment reward
-only** — the same signal R-STDP gets — with no expert labels at adaptation time.
-Its closed-loop adaptation behaviour is measured in M4/M5, not here.
+## Online-TD(λ) MLP (controller 2) — the fair R-STDP competitor
+Upgraded from one-step TD to an **actor-critic with eligibility traces** (TD(λ),
+λ=0.9). This is the deliberate structural parallel to R-STDP: both accumulate a
+per-parameter/synapse eligibility trace and consolidate it under an environment-reward
+signal — differing only in substrate (SGD vs local plasticity). λ=0 exactly recovers the
+proposal's original one-step baseline. Verified: one act→observe changes weights
+(max|ΔW| = 1.5e-3); provably frozen when `frozen=True`. Closed-loop adaptation is measured
+in M4/M5 (this milestone is the pre-shift bar).
 
-## Reproduce
+## Variance / rigor notes
+- CIs capture **init + SGD-order** variance (5 seed-models on the fixed DAgger dataset).
+  DAgger-collection variance is not resampled (one aggregation, 61,082 steps) — a known,
+  documented scope choice; M5's full comparison resamples the whole pipeline per seed.
+
+## Reproduce (Windows, conda nmc)
 ```
-python scripts/train_mlp_go2.py                       # BC pretrain (86.5% val acc)
-python scripts/dagger_go2.py --iters 2 --episodes 40  # DAgger -> 33% held-out
-python scripts/eval_mlp_go2.py --episodes 30          # eval + figure + GIF
+python scripts/train_mlp_go2.py                       # BC pretrain (512x512)
+python scripts/dagger_go2.py --iters 2 --episodes 40  # DAgger -> data/imitation_go2_dagger.npz
+python scripts/train_seeds_mlp_go2.py --seeds 5       # 5 seed-models
+python scripts/eval_mlp_go2.py --episodes 30          # SPL + CIs + figures + online check
 ```

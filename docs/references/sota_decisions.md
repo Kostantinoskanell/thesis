@@ -185,5 +185,41 @@ costs nothing.
 
 ---
 
+## D7. Baseline strength: "SOTA baselines" vs "fair baselines"  (RESOLVED — strong *and* fair, upgrades that also improve fairness)
+
+**Question raised:** should the M2 MLP baselines be upgraded with more SOTA machinery?
+
+**Decision:** Yes — but the governing criterion for a *baseline* is **strong-and-fair, not
+maximal**. The thesis contribution is the R-STDP controller; the baselines exist to make
+the comparison rigorous. A baseline upgrade is worth doing when it (a) is genuinely SOTA
+*and* (b) keeps the comparison apples-to-apples (or makes it fairer). Upgrades that would
+make a baseline asymmetrically strong in ways the SNN can't match (privileged features,
+recurrence/memory the SNN lacks, expert labels post-shift) are **rejected as unfair**, not
+embraced as "more SOTA."
+
+**Applied upgrades (M2):**
+1. **Online MLP → eligibility-trace TD(λ) actor-critic** (was one-step TD). This is both
+   more SOTA *and fairer*: R-STDP's mechanism is itself an eligibility trace gated by a
+   global reward (proposal Eq. rstdp), so giving the online MLP eligibility traces makes
+   the two adaptive controllers structurally parallel — they differ only in substrate.
+   λ=0 exactly recovers the proposal's original one-step baseline, so nothing is lost.
+2. **SPL** (Success weighted by Path Length, Anderson et al. 2018, arXiv:1807.06757) +
+   collision rate — the standard embodied-navigation metric suite, reused across all five
+   controllers in M5. Success rate alone can't see detour inefficiency.
+3. **Multi-seed + 95% CIs** (Wilson for a single controller's success count; t-interval
+   across seed-models). A single-seed point estimate is not defensible at a defense; the
+   ROADMAP already mandates this for M5, adopted early here.
+4. **MLP capacity parity with the LIF-SNN** (512×512 + LayerNorm). Removes the "the
+   baseline was under-powered" objection.
+
+**Rejected (this round):** continuous action space `[v, ω]`. More SOTA for navigation, but
+the proposal locked discrete 4-action (population-vote SNN decoder) and it would cascade
+through D3/M2–M8 — scope disproportionate to a part that isn't the contribution. See D4.
+
+**Principle for the rest of the thesis:** apply the same test to every baseline/ablation
+upgrade — SOTA *and* fair, symmetric across controllers.
+
+---
+
 _Update this log whenever a new SOTA option is identified. Every "we chose the simpler
 thing" must have an entry saying why and when to revisit._

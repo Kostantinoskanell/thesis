@@ -63,7 +63,8 @@ def main():
     print(f"demos: {n} steps | action counts {dict(zip(ACTION_NAMES, counts))}")
     print(f"class weights: {w.numpy().round(2)}")
 
-    policy = MLPPolicy(obs_dim=X.shape[1], n_actions=4)
+    # Capacity parity with the LIF-SNN (512x512 + LayerNorm); dropout regularizes BC.
+    policy = MLPPolicy(obs_dim=X.shape[1], n_actions=4, dropout=0.1)
     opt = torch.optim.Adam(policy.parameters(), lr=args.lr)
 
     hist = {"epoch": [], "train_loss": [], "val_acc": []}
@@ -97,7 +98,7 @@ def main():
     out = ROOT / args.out
     out.parent.mkdir(parents=True, exist_ok=True)
     torch.save({"state_dict": policy.state_dict(),
-                "obs_dim": X.shape[1], "n_actions": 4}, out)
+                "obs_dim": X.shape[1], "n_actions": 4, "hidden": [512, 512]}, out)
     print(f"saved -> {args.out}")
 
     import matplotlib

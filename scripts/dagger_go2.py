@@ -133,7 +133,7 @@ def main():
 
     np.savez_compressed(ROOT / args.out_data, obs=X, action=Y)
     torch.save({"state_dict": policy.state_dict(), "obs_dim": X.shape[1],
-                "n_actions": 4}, ROOT / args.out_model)
+                "n_actions": 4, "hidden": [512, 512]}, ROOT / args.out_model)
     print(f"saved dataset -> {args.out_data}  model -> {args.out_model}")
     ok = hits["reached"] >= max(3, int(0.3 * n))
     print("M2 frozen-MLP:", "PASS" if ok else "STILL BELOW BAR")
