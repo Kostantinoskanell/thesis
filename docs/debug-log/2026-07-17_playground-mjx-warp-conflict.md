@@ -28,6 +28,22 @@ NON-contribution component). Options recorded for the user:
 3. **Proceed on the CPG interim** — unblock the plasticity science now (real Go2 walks
    via SDK sport-mode on hardware anyway), revisit locomotion quality later.
 
+## RESOLUTION — the working pinned stack (three layers of version-hell)
+User chose to keep pushing RL. Peeled three conflicts:
+1. **Warp backend** — playground ≥0.1.0 + mjx 3.10 require MuJoCo-Warp (`GraphMode.WARP`)
+   which wouldn't resolve → pin **playground 0.0.5** (last pre-Warp).
+2. **brax ↔ jax** — brax's PPO calls `jax.device_put_replicated`, removed in jax ≥0.10 →
+   pin **jax[cuda12] 0.4.38** (still has it).
+3. **mjx `_impl`** — playground 0.0.5's collision code needs `data._impl`, absent in mjx
+   3.3.1 but present (and pre-Warp) in **mjx 3.4.0**.
+
+Working WSL2 GPU stack (verified `env.step` runs, reward computed):
+```
+playground==0.0.5  mujoco==3.4.0  mujoco-mjx==3.4.0  brax==0.12.1  jax[cuda12]==0.4.38
+```
+Reproduce with `scripts/wsl_repin_rl.sh`. ("Failed to import warp" warnings are benign —
+it falls back to the JAX backend.)
+
 ## Lesson
 "Train our own RL policy" is feasible on this GPU, but the JAX/MJX/Playground/Warp stack
 is fast-moving and version-fragile. Budget for a pinned, known-good environment (or a

@@ -76,5 +76,54 @@ pilot shows the plasticity has no temporal signal to exploit.
 
 ---
 
+## D5. Synapse substrate: memristor-inspired FPGA  vs  real memristor  (RESOLVED — FPGA primary, real device as characterization add-on)
+
+**Question raised:** could a real memristor replace the memristor-inspired FPGA synapse
+array?
+
+**Decision:** **No full replacement — keep the FPGA as the synapse array, and add one
+discrete real memristor as a bounded device-characterization study.** Frame it as a
+*hybrid*: measure real device behaviour, fit the synapse model, load the measured
+parameters into the FPGA update rule.
+
+**What is actually purchasable (2026):** [Knowm](https://knowm.com/collections/all) is
+the only off-the-shelf source. Self-Directed-Channel (SDC) discrete devices — 8 in a
+16-DIP or 16 in a 32-DIP (breadboard-friendly) — and small crossbars up to **32×32** on
+64-pin edge boards. "Burn & Learn" research chips are intermittently stocked at reduced
+cost. Robot-controller-scale memristive crossbars exist only in fabs (IBM, HP, Tsinghua),
+not for sale.
+
+**Why full replacement fails for this thesis:**
+- **Scale** — a 32×32 crossbar caps at 1024 synapses; an R-STDP locomotion network needs
+  orders of magnitude more.
+- **Variability / endurance** — SDC devices are stochastic with large device-to-device
+  spread and conductance drift over potentiation/depression cycles. Fine for a
+  characterization study, brutal for a controller training in closed loop for hours.
+- **Instrumentation burden** — proper pulsing needs controlled amplitude/width, current
+  compliance, and precise readout (an SMU like a Keithley 2400/2600, or a careful
+  DAC/ADC + op-amp front-end off the FPGA). A mixed-signal sub-project on its own.
+
+**Why the hybrid is the *stronger* thesis (per SOTA directive):** most memristor-inspired
+FPGA work uses an idealized synapse model (linear / Biolek window). Measuring real STDP
+conductance-change curves on an 8-device DIP (~$300–400), fitting the model, and loading
+*those measured parameters* into the FPGA synapse update rule supports a claim few
+undergrad theses can make: **"R-STDP controller validated against real device physics."**
+This directly reinforces D1's memristor-native R-STDP instance and the crossbar story,
+and keeps the honest-scope line in [memristors_hardware.md](memristors_hardware.md)
+(we remain memristor-*inspired*; the real device grounds the analogy, it is not the
+compute substrate).
+
+**Cost / gating:** ~2–4 weeks including instrument time; **bounded add-on, not a
+re-architecture.** Gating resource is an SMU — check the ECE Patras
+electronics/microelectronics lab for a bookable unit *before* committing. Order the
+Knowm chip early (ships from the US; research stock is intermittent). Crossbar-scale
+all-analog version → **future work**.
+
+Sources: [Knowm 8-Discrete 16-DIP](https://knowm.com/products/m-sdc-memristor-8-discrete-16-dip),
+[W+SDC crossbars PCIE-64](https://knowm.com/products/w-sdc-memristor-crossbars),
+[Burn & Learn 16-Discrete 32-DIP](https://knowm.com/products/burn-learn-m-sdc-memristor-16-discrete-32-dip).
+
+---
+
 _Update this log whenever a new SOTA option is identified. Every "we chose the simpler
 thing" must have an entry saying why and when to revisit._

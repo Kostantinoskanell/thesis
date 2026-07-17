@@ -4,8 +4,11 @@
 set -e
 cd ~
 source nmc-rl2/bin/activate
-echo "re-pinning coherent early-2025 snapshot (jax 0.4.38) ..."
-pip install -q "playground==0.0.5" "mujoco==3.3.1" "mujoco-mjx==3.3.1" \
+# WORKING coherent stack (hard-won — see debug-log playground-mjx-warp-conflict):
+#   pre-Warp playground 0.0.5 + mjx 3.4.0 (has data._impl, no warp) + brax 0.12.1
+#   + jax 0.4.38 (has device_put_replicated that brax needs).
+echo "re-pinning WORKING stack (jax 0.4.38, mjx 3.4.0) ..."
+pip install -q "playground==0.0.5" "mujoco==3.4.0" "mujoco-mjx==3.4.0" \
   "brax==0.12.1" "jax[cuda12]==0.4.38"
 python - <<'PY'
 import jax, brax, mujoco
