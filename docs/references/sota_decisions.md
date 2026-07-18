@@ -276,5 +276,37 @@ unchanged. Implemented; raw is the ablation for the writeup ("why RPE was needed
 
 ---
 
+## D9. Plasticity site + stability: readout-only  vs  input-layer + anchoring  (RESOLVED — input+readout plasticity with weight anchoring)
+
+**Question (M4 pilot):** where should R-STDP act, and how to keep it stable?
+
+**Decision:** apply R-STDP to the **input layer AND the readout** (not readout-only), with
+**elastic weight anchoring** (pull toward the pretrained weights each step) for stability.
+
+**Why input-layer plasticity (evidence-driven):** the M4 sensor-dropout test corrupts the
+navigator's *input* (dead LiDAR beams). Readout-only plasticity **provably cannot re-map a
+broken input** — it stalled at 7% while the full-backprop online-MLP (which adapts input
+layers) recovered early. Extending R-STDP to `fc[0]` (input) moved it **7% → 30%**,
+matching the best baseline. The proposal named this ("readout first… extend to hidden
+layers"); M4 gave the concrete reason.
+
+**Why anchoring:** unregularized continual adaptation *over-adapts and collapses* — the
+online-MLP recovered to 0.8 then fell to 0 with catastrophic forgetting (7% base
+retention). Anchoring (`W += anchor·(W0 − W)` per step) pulls weights back toward the
+pretrained anchor, resolving the stability-plasticity dilemma: R-STDP kept 43% base
+retention (highest) *and* 30% shifted success. This is the literature's "controlled
+forgetting" mitigation, in a local-plasticity-friendly form (a per-synapse decay toward a
+stored value — hardware-cheap, unlike replay).
+
+**Implementation:** `SNNController` now takes `plastic_layers` (per-layer weight/learner/
+anchor) and `anchor`; per-layer saturation bounds from each layer's own weight scale.
+FPGA note: multi-layer + a decay-to-anchor term are still local per-synapse ops — the
+crossbar datapath is unchanged (one extra register for W0 per synapse).
+
+**Status:** positive **signal** at n=30 (CIs overlap); M5's ≥10-seed GPU runs confirm
+significance and can tune anchor/η.
+
+---
+
 _Update this log whenever a new SOTA option is identified. Every "we chose the simpler
 thing" must have an entry saying why and when to revisit._

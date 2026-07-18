@@ -50,6 +50,20 @@ class Go2NavConfig:
     seed: int = 0
     sensor_noise_std: float = 0.0    # additive Gaussian on lidar (robustness sweep)
 
+    # -- distribution-shift type (M4). The mid-episode shift can be one of:
+    #   "obstacles" : density doubling (weak -- mapping stays valid, just harder)
+    #   "sensor"    : a contiguous block of LiDAR beams fails (dead = max range) --
+    #                 corrupts the navigator's INPUT so the pretrained mapping is
+    #                 wrong (strong test; the proposal's "sensor degradation")
+    #   "terrain"   : floor friction changes road->ice/sand -- a DYNAMICS shift the
+    #                 navigator sees only via its v/omega channels (medium test;
+    #                 precedent: Juarez-Lora 2022 changing-friction R-STDP)
+    shift_type: str = "obstacles"
+    sensor_dropout_frac: float = 0.35   # fraction of contiguous beams killed at shift
+    sensor_dropout_start: int = -1      # first dead beam index; -1 = random per episode
+    terrain_mode: str = "ice"           # "ice" (low friction) | "sand" (high friction)
+    terrain_friction: dict = None       # {"ice":0.08,"sand":1.6}; None -> defaults
+
 
 # Discrete action -> velocity command [vx, vy, omega] for the RL walker.
 # Turn rate 1.0 rad/s stays inside the policy's training command range (|w|<=1.2).
@@ -155,6 +169,17 @@ class Go2NavEnv:
         self._raygroup = np.zeros(6, dtype=np.uint8)
         self._raygroup[4] = 1
 
+        # Terrain-shift plumbing: give the floor higher contact priority so ITS
+        # friction fully determines foot-ground contact (otherwise contact friction
+        # = max(floor, foot) and lowering the floor alone wouldn't make it slippery).
+        self.model.geom_priority[self._floor_geom] = 2
+        self._floor_friction0 = self.model.geom_friction[self._floor_geom].copy()
+        self._floor_mat = mujoco.mj_name2id(
+            self.model, mujoco.mjtObj.mjOBJ_MATERIAL, "groundplane")
+        self._floor_rgba0 = (self.model.mat_rgba[self._floor_mat].copy()
+                             if self._floor_mat >= 0 else None)
+        self._dead_beams = None          # bool mask (n_lidar,) of failed LiDAR beams
+
         self._active_s: list[str] = []   # names of obstacles currently in-arena
         self._active_d: list[dict] = []  # {"name", "vel"}
         self.goal = np.zeros(2)
@@ -168,6 +193,11 @@ class Go2NavEnv:
         if seed is not None:
             self.rng = np.random.default_rng(seed)
         self.bot.reset()
+        # Restore any shift-mutated state to the base distribution.
+        self.model.geom_friction[self._floor_geom] = self._floor_friction0
+        if self._floor_mat >= 0:
+            self.model.mat_rgba[self._floor_mat] = self._floor_rgba0
+        self._dead_beams = None
         # Park everything.
         for i in range(self._n_s_max):
             self.data.mocap_pos[self._mocap[f"s{i}"]] = [_PARK_X + 2 * i, 0, OBST_HALF_H + 0.01]
@@ -267,7 +297,10 @@ class Go2NavEnv:
             d = mujoco.mj_ray(self.model, self.data, pnt, vec,
                               self._raygroup, 1, -1, geomid)
             dists[i] = rng_m if d < 0 else min(d, rng_m)
-        return np.clip(dists / rng_m, 0.0, 1.0)
+        out = np.clip(dists / rng_m, 0.0, 1.0)
+        if self._dead_beams is not None:      # failed beams read max range ("nothing")
+            out[self._dead_beams] = 1.0
+        return out
 
     # -- obstacles ----------------------------------------------------------
     def _place_static(self, n):
@@ -288,6 +321,18 @@ class Go2NavEnv:
                                    "vel": np.array([spd * np.cos(ang), spd * np.sin(ang)])})
 
     def _inject_shift(self):
+        """Dispatch the mid-episode distribution shift by type (M4)."""
+        t = self.cfg.shift_type
+        if t == "obstacles":
+            self._inject_obstacles()
+        elif t == "sensor":
+            self._inject_sensor()
+        elif t == "terrain":
+            self._inject_terrain()
+        else:
+            raise ValueError(f"unknown shift_type {t!r}")
+
+    def _inject_obstacles(self):
         # Double static density + add moving obstacles, mid-episode, no reset.
         self._occupied = [(self.data.mocap_pos[self._mocap[n]][:2].copy(), OBST_RADIUS)
                           for n in self._active_s] \
@@ -298,6 +343,36 @@ class Go2NavEnv:
         self._occupied.append((self.goal.copy(), 1.0))
         self._place_static(self.cfg.n_static_obstacles)
         self._place_dynamic(self.cfg.n_dynamic_obstacles)
+
+    def _inject_sensor(self):
+        """Fail a contiguous block of LiDAR beams (they read max range = 'nothing
+        there'). Corrupts the navigator's input so its pretrained obs->action
+        mapping is wrong -- the proposal's 'sensor degradation' shift. The block
+        start is fixed per episode-block (deterministic given the env seed) so a
+        plastic controller CAN learn the specific remapping across the block."""
+        n = self.cfg.n_lidar_beams
+        k = int(round(self.cfg.sensor_dropout_frac * n))
+        start = (self.cfg.sensor_dropout_start
+                 if self.cfg.sensor_dropout_start >= 0
+                 else int(self.rng.integers(0, n)))
+        mask = np.zeros(n, dtype=bool)
+        mask[(start + np.arange(k)) % n] = True
+        self._dead_beams = mask
+
+    def _inject_terrain(self):
+        """Change floor friction road->ice/sand (a dynamics shift). The RL walker
+        was trained with friction ~U(0.4,1.0); ice (0.08) / sand (1.6) are outside
+        that, so velocity tracking degrades and the navigator must compensate via
+        its v/omega channels. Floor is recolored so the change is visible."""
+        fr = self.cfg.terrain_friction or {"ice": 0.08, "sand": 1.6}
+        mu = fr[self.cfg.terrain_mode]
+        f = self.model.geom_friction[self._floor_geom].copy()
+        f[0] = mu
+        self.model.geom_friction[self._floor_geom] = f
+        if self._floor_mat >= 0:
+            self.model.mat_rgba[self._floor_mat] = (
+                [0.70, 0.85, 1.0, 1.0] if self.cfg.terrain_mode == "ice"
+                else [0.85, 0.72, 0.45, 1.0])
 
     def _advance_dynamic(self, dt: float):
         s = self.cfg.arena_size_m / 2.0 - self.ARENA_MARGIN

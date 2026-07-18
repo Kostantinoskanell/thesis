@@ -138,18 +138,40 @@ class SNNController:
                  stdp_cfg: STDPConfig | None = None, device: str = "cpu",
                  reward_mode: str = "raw", rpe_alpha: float = 0.02,
                  gate_threshold: float = 0.0, critic_lr: float = 0.05,
-                 gamma: float = 0.97):
+                 gamma: float = 0.97, plastic_layers=None, anchor: float = 0.0):
         self.net = net.to(device)
         self.device = device
         self.plasticity_enabled = plasticity_enabled
-        # Online plasticity acts on the final (readout) layer weights as the
-        # first target; extend to hidden layers once validated.
-        w = net.fc[-1].weight.detach().cpu().numpy().astype(np.float64)
-        self.W = w
+        # Which linear layers get online R-STDP. Default = readout only (index
+        # n-1). To let R-STDP re-map corrupted INPUTS (e.g. sensor dropout, which
+        # readout-only plasticity provably cannot fix -- M4 finding), include the
+        # input layer (index 0). Each plastic layer gets its own weight copy,
+        # STDPLearner, and pretrained anchor W0.
+        n_layers = len(net.fc)
+        if plastic_layers is None:
+            plastic_layers = [n_layers - 1]
+        self.plastic_layers = [i % n_layers for i in plastic_layers]
+        import dataclasses
         cfg = stdp_cfg or STDPConfig()
-        self.learner = STDPLearner(n_pre=w.shape[1], n_post=w.shape[0], cfg=cfg)
-        self._last_hidden_spikes = None
-        self._last_out_spikes = None
+        self.layer = {}
+        for i in self.plastic_layers:
+            w = net.fc[i].weight.detach().cpu().numpy().astype(np.float64)
+            # Per-layer saturation bounds from THIS layer's weight scale (layers
+            # differ in magnitude); shared bounds would clip some layers wrongly.
+            b = 2.0 * float(np.abs(w).max()) if w.size else 1.0
+            lcfg = dataclasses.replace(cfg, w_min=-b, w_max=b)
+            self.layer[i] = {
+                "W": w,
+                "W0": w.copy(),          # pretrained anchor (stability)
+                "learner": STDPLearner(n_pre=w.shape[1], n_post=w.shape[0], cfg=lcfg),
+            }
+        # Stabilization: after each consolidation, pull weights back toward the
+        # pretrained anchor by `anchor` (elastic weight anchoring). Counters the
+        # over-adaptation collapse seen in M4 (online adaptation recovers early
+        # then drifts off). 0 = no anchoring.
+        self.anchor = anchor
+        self._win_pre = None
+        self._win_post = None
         # Third-factor signal. "raw" = env reward directly. "rpe" = reward-
         # prediction error r - r_bar (r_bar an EMA), i.e. dopamine-style
         # baseline subtraction: potentiate only BETTER-than-expected outcomes,
@@ -171,10 +193,9 @@ class SNNController:
         self._wv = None      # critic weights, lazily sized to the observation
         self._bv = 0.0
         self._cur_obs = None
-        # Diagnostics: how often the gate opens + cumulative weight drift.
+        # Diagnostics: how often the gate opens.
         self.n_learn = 0
         self.n_gate_open = 0
-        self._W0 = self.W.copy()
 
     def _value(self, obs):
         if self._wv is None:
@@ -184,12 +205,17 @@ class SNNController:
     def act(self, x_seq: torch.Tensor, obs=None) -> int:
         self._cur_obs = None if obs is None else np.asarray(obs, dtype=np.float64)
         out_sum, all_spikes = self.net(x_seq)
-        # Cache the FULL within-window spike trains of the last-hidden (presynaptic
-        # to the readout) and output (postsynaptic) layers, so the plasticity step
-        # can replay the T timesteps and use the actual spike timing -- not just the
-        # final timestep. B=1 in closed loop.
-        self._win_hidden = [s[-2].detach().cpu().numpy().ravel() for s in all_spikes]
-        self._win_out = [s[-1].detach().cpu().numpy().ravel() for s in all_spikes]
+        # For each plastic layer i cache the full within-window pre/post spike
+        # trains: pre = the encoded input (layer 0) or the previous layer's spikes,
+        # post = layer i's spikes. Lets learn() replay the T timesteps with real
+        # spike timing. B=1 in closed loop.
+        self._win_pre = {i: [] for i in self.plastic_layers}
+        self._win_post = {i: [] for i in self.plastic_layers}
+        for t, step in enumerate(all_spikes):
+            for i in self.plastic_layers:
+                pre = x_seq[t] if i == 0 else step[i - 1]
+                self._win_pre[i].append(pre.detach().cpu().numpy().ravel())
+                self._win_post[i].append(step[i].detach().cpu().numpy().ravel())
         return self.net.decode(out_sum)
 
     def learn(self, reward: float = 0.0, next_obs=None, done: bool = False):
@@ -198,7 +224,7 @@ class SNNController:
         accumulated eligibility with the global third factor. Faithful three-factor
         rule (proposal Eq. rstdp); pure STDP (reward_modulated=False) applies the
         Hebbian term per step."""
-        if not self.plasticity_enabled or not getattr(self, "_win_out", None):
+        if not self.plasticity_enabled or not self._win_post:
             return
         # Third factor: raw reward | reward-prediction error | TD error.
         if self.reward_mode == "td":
@@ -229,14 +255,20 @@ class SNNController:
             modulator = 0.0
         else:
             self.n_gate_open += 1
-        zero_pre = np.zeros(self.W.shape[1])
-        zero_post = np.zeros(self.W.shape[0])
-        for h, o in zip(self._win_hidden, self._win_out):
-            self.learner.step(self.W, h, o, reward=0.0)   # accumulate eligibility
-        if self.learner.cfg.reward_modulated:
-            self.learner.step(self.W, zero_pre, zero_post, reward=modulator)  # consolidate
-        with torch.no_grad():
-            self.net.fc[-1].weight.copy_(torch.as_tensor(self.W, dtype=self.net.fc[-1].weight.dtype))
+        # Apply the three-factor rule to every plastic layer, then anchor.
+        for i in self.plastic_layers:
+            L = self.layer[i]
+            W, learner = L["W"], L["learner"]
+            for pre, post in zip(self._win_pre[i], self._win_post[i]):
+                learner.step(W, pre, post, reward=0.0)          # accumulate eligibility
+            if learner.cfg.reward_modulated:
+                learner.step(W, np.zeros(W.shape[1]), np.zeros(W.shape[0]),
+                             reward=modulator)                   # consolidate
+            if self.anchor > 0.0:
+                W += self.anchor * (L["W0"] - W)                # pull toward pretrained
+            with torch.no_grad():
+                self.net.fc[i].weight.copy_(
+                    torch.as_tensor(W, dtype=self.net.fc[i].weight.dtype))
 
 
 class SNNNavController:
@@ -257,7 +289,7 @@ class SNNNavController:
                  plasticity_enabled: bool = False, stdp_cfg: "STDPConfig | None" = None,
                  device: str = "cpu", seed: int = 0,
                  reward_mode: str = "raw", rpe_alpha: float = 0.02,
-                 gate_threshold: float = 0.0):
+                 gate_threshold: float = 0.0, plastic_layers=None, anchor: float = 0.0):
         import numpy as _np
         self.net = net.to(device)
         self.net.eval()
@@ -267,7 +299,8 @@ class SNNNavController:
         self.rng = _np.random.default_rng(seed)
         self.core = (SNNController(net, plasticity_enabled=True, stdp_cfg=stdp_cfg,
                                    device=device, reward_mode=reward_mode,
-                                   rpe_alpha=rpe_alpha, gate_threshold=gate_threshold)
+                                   rpe_alpha=rpe_alpha, gate_threshold=gate_threshold,
+                                   plastic_layers=plastic_layers, anchor=anchor)
                      if plasticity_enabled else None)
         # Spike-activity accounting (energy proxy / H2 preview): total emitted
         # spikes and total neuron-steps, accumulated across act() calls.

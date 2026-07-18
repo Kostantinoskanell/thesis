@@ -65,14 +65,16 @@ def readout_bounds(net, margin_scale=2.0):
     return -b, b
 
 
-def make_rstdp(eta, seed, reward_mode="rpe", gate_threshold=0.0):
+def make_rstdp(eta, seed, reward_mode="rpe", gate_threshold=0.0,
+               plastic_layers=None, anchor=0.0):
     net, T = load_snn_net()
     w_min, w_max = readout_bounds(net)
     cfg = STDPConfig(reward_modulated=True, eta=eta, tau_e_ms=200.0,
                      w_min=w_min, w_max=w_max)
     return SNNNavController(net, n_steps=T, plasticity_enabled=True,
                            stdp_cfg=cfg, seed=seed, reward_mode=reward_mode,
-                           gate_threshold=gate_threshold)
+                           gate_threshold=gate_threshold,
+                           plastic_layers=plastic_layers, anchor=anchor)
 
 
 def make_frozen_snn(seed):
@@ -80,11 +82,20 @@ def make_frozen_snn(seed):
     return SNNNavController(net, n_steps=T, plasticity_enabled=False, seed=seed)
 
 
-def make_online_mlp():
+def _load_mlp():
     ckpt = torch.load(MLP_CKPT, weights_only=True)
     pol = MLPPolicy(ckpt["obs_dim"], ckpt["n_actions"], hidden=tuple(ckpt["hidden"]))
     pol.load_state_dict(ckpt["state_dict"]); pol.eval()
-    return OnlineMLP(pol, frozen=False, lam=0.9)
+    return pol
+
+
+def make_online_mlp():
+    return OnlineMLP(_load_mlp(), frozen=False, lam=0.9)
+
+
+def make_frozen_mlp():
+    # M2's conventional "deploy and freeze" net -- the key thing R-STDP must beat.
+    return OnlineMLP(_load_mlp(), frozen=True)
 
 
 def run_block(env, controller, seeds, adapt=True):
@@ -137,15 +148,36 @@ def compare(args):
     fired, so the shift rarely bit). Dense = 16 static + 6 dynamic = the same
     obstacle count the mid-episode shift produces."""
     OUT.mkdir(parents=True, exist_ok=True)
-    env = Go2NavEnv(Go2NavConfig(n_static_obstacles=16, n_dynamic_obstacles=6,
-                                 shift_time_s=1e9, episode_len_s=60.0))
+    # The shifted regime the controllers must adapt to, applied from ~t=0 so the
+    # whole episode is in it (shift fires at 0.5s). sensor = dead beams (strong);
+    # terrain = friction change; obstacles = persistently dense (the weak one).
+    if args.shift_type == "obstacles":
+        shift_cfg = Go2NavConfig(shift_type="obstacles", n_static_obstacles=16,
+                                 n_dynamic_obstacles=6, shift_time_s=1e9, episode_len_s=60.0)
+    elif args.shift_type == "sensor":
+        shift_cfg = Go2NavConfig(shift_type="sensor", shift_time_s=0.5,
+                                 sensor_dropout_frac=args.dropout,
+                                 sensor_dropout_start=args.dropout_start, episode_len_s=60.0)
+    else:
+        shift_cfg = Go2NavConfig(shift_type="terrain", terrain_mode=args.terrain_mode,
+                                 shift_time_s=0.5, episode_len_s=60.0)
+    env = Go2NavEnv(shift_cfg)
     seeds = list(range(5000, 5000 + args.episodes))
 
+    # All four contestants under the SAME shift: the two adaptive (R-STDP SNN,
+    # online-MLP) vs the two frozen (frozen SNN, frozen MLP = M2's deployed net).
+    # net has 3 linear layers: fc[0] in->h1, fc[1] h1->h2, fc[2] h2->readout.
+    pl = {"readout": [-1], "input+readout": [0, -1], "all": [0, 1, 2]}.get(
+        args.plastic_layers)
+    if pl is None:
+        pl = [int(x) for x in args.plastic_layers.split(",")]
     controllers = {
         "R-STDP SNN": make_rstdp(args.eta, seed=7, reward_mode=args.reward_mode,
-                                 gate_threshold=args.gate),
-        "frozen SNN": make_frozen_snn(seed=7),
+                                 gate_threshold=args.gate, plastic_layers=pl,
+                                 anchor=args.anchor),
         "online-MLP": make_online_mlp(),
+        "frozen SNN": make_frozen_snn(seed=7),
+        "frozen MLP": make_frozen_mlp(),
     }
     # Base (unshifted) env for the RETENTION test: after adapting to the shifted
     # regime, does the controller still solve the ORIGINAL task, or did plasticity
@@ -157,7 +189,7 @@ def compare(args):
 
     results = {}
     for name, ctrl in controllers.items():
-        adapt = name != "frozen SNN"
+        adapt = "frozen" not in name        # adaptive: R-STDP SNN, online-MLP
         succ, coll = run_block(env, ctrl, seeds, adapt=adapt)
         # retention: re-test on base distribution with adaptation FROZEN (weights
         # stay at their post-shift-adapted state).
@@ -178,7 +210,8 @@ def compare(args):
     def sliding(x, w=8):
         return np.array([x[max(0, i - w + 1):i + 1].mean() for i in range(len(x))])
 
-    colors = {"R-STDP SNN": "#c0392b", "frozen SNN": "#7f8c8d", "online-MLP": "#1950a0"}
+    colors = {"R-STDP SNN": "#c0392b", "online-MLP": "#1950a0",
+              "frozen SNN": "#7f8c8d", "frozen MLP": "#b0b0b0"}
     fig, (a1, a2) = plt.subplots(1, 2, figsize=(12, 4.5))
     for name, r in results.items():
         a1.plot(sliding(r["succ"]), color=colors[name], lw=2, label=name)
@@ -200,11 +233,14 @@ def compare(args):
     a2.set_ylabel("success rate"); a2.set_ylim(0, 1)
     a2.legend(frameon=False, fontsize=8)
     a2.set_title("stability-plasticity: adapt vs retain")
-    fig.suptitle(f"M4 pilot -- adaptation in the dense (post-shift) regime "
-                 f"(eta={args.eta}, gate={args.gate}, {args.episodes} eps/controller)")
+    shift_lbl = (f"{args.shift_type}" + (f" {args.dropout:.0%}" if args.shift_type == "sensor"
+                 else f" {args.terrain_mode}" if args.shift_type == "terrain" else ""))
+    fig.suptitle(f"M4 pilot -- recovery under '{shift_lbl}' shift "
+                 f"(eta={args.eta}, {args.episodes} eps/controller)")
+    OUT_FIG = OUT / f"fig_pilot_{args.shift_type}.png"
     fig.tight_layout()
-    fig.savefig(OUT / "fig_pilot_recovery.png", bbox_inches="tight", dpi=150)
-    print(f"\nwrote {OUT / 'fig_pilot_recovery.png'}")
+    fig.savefig(OUT_FIG, bbox_inches="tight", dpi=150)
+    print(f"\nwrote {OUT_FIG}")
 
     r = results["R-STDP SNN"]["succ"]; f = results["frozen SNN"]["succ"]
     half = len(r) // 2
@@ -225,6 +261,15 @@ def main():
     ap.add_argument("--gate", type=float, default=0.0,
                     help="RPE gate threshold: suppress the update unless |RPE|>gate "
                          "(learn only when surprised). 0 = ungated.")
+    ap.add_argument("--shift-type", choices=["obstacles", "sensor", "terrain"],
+                    default="sensor", help="which distribution shift the compare block uses")
+    ap.add_argument("--dropout", type=float, default=0.30, help="sensor: dead-beam fraction")
+    ap.add_argument("--dropout-start", type=int, default=8, help="sensor: first dead beam")
+    ap.add_argument("--terrain-mode", choices=["ice", "sand"], default="ice")
+    ap.add_argument("--plastic-layers", default="readout",
+                    help="'readout' | 'input+readout' | 'all' | comma indices e.g. 0,2")
+    ap.add_argument("--anchor", type=float, default=0.0,
+                    help="elastic anchor to pretrained weights each step (stabilization)")
     args = ap.parse_args()
     if args.mode == "guardrail":
         guardrail(args)
