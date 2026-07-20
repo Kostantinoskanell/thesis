@@ -52,6 +52,11 @@ def _load_model(scene_xml: str | None = None) -> mujoco.MjModel:
         scene_xml = (_XMLS / "scene_go2_playground_flat.xml").read_text()
     model = mujoco.MjModel.from_xml_string(scene_xml, assets=assets)
     model.opt.timestep = SIM_DT
+    # MuJoCo's default offscreen framebuffer (640x480) is too small for
+    # presentation-quality renders; bump it so render(w=..., h=...) can go
+    # up to 1080p without a "framebuffer too small" error.
+    model.vis.global_.offwidth = 1920
+    model.vis.global_.offheight = 1080
     return model
 
 
@@ -135,21 +140,23 @@ class Go2RLWalker:
 
     def render(self, w=480, h=360, cam_dist=1.8, azimuth=130, elevation=-20,
                show_collision=False):
-        """Render one frame. show_collision=True overlays the collision geometry
-        (robot collision capsules = geom group 3, obstacle/wall collision geoms =
-        group 4) and contact points/forces, so you can see the actual collision
-        boxes and where contacts happen -- useful for verifying the moving
-        obstacles and near-misses."""
+        """Render one frame. Go2NavEnv's obstacles/walls (geom group 4) are NOT
+        one of MuJoCo's default-visible groups, so group 4 is force-enabled on
+        EVERY render, not just show_collision -- otherwise obstacles/walls are
+        silently invisible in ordinary (non-debug) renders (found via the M4
+        presentation videos, where the whole arena appeared empty; see
+        debug-log). show_collision=True additionally overlays the robot's own
+        collision capsules (group 3, normally hidden -- redundant with its
+        visual mesh) and contact points/forces."""
         if self._renderer is None:
             self._renderer = mujoco.Renderer(self.model, height=h, width=w)
         cam = mujoco.MjvCamera()
         cam.lookat[:] = self.data.qpos[:3]
         cam.distance, cam.azimuth, cam.elevation = cam_dist, azimuth, elevation
-        opt = None
+        opt = mujoco.MjvOption()
+        opt.geomgroup[4] = 1     # obstacles + walls -- always visible
         if show_collision:
-            opt = mujoco.MjvOption()
             opt.geomgroup[3] = 1     # robot collision primitives (normally hidden)
-            opt.geomgroup[4] = 1     # obstacle + wall collision geoms
             opt.flags[mujoco.mjtVisFlag.mjVIS_CONTACTPOINT] = True
             opt.flags[mujoco.mjtVisFlag.mjVIS_CONTACTFORCE] = True
             opt.flags[mujoco.mjtVisFlag.mjVIS_TRANSPARENT] = True  # see boxes through meshes

@@ -16,5 +16,6 @@ re-solving the same problem twice.
 | 2026-07-17 | MuJoCo Playground↔MJX↔Warp version conflict (RL timebox) | [playground-mjx-warp-conflict](2026-07-17_playground-mjx-warp-conflict.md) |
 | 2026-07-17 | A* teacher freezes after shift (dense field disconnects free space) | [astar-freeze-after-shift](2026-07-17_astar-freeze-after-shift.md) |
 | 2026-07-17 | BC student: 86% step accuracy but 23% closed-loop success → DAgger | [bc-covariate-shift-dagger](2026-07-17_bc-covariate-shift-dagger.md) |
+| 2026-07-18 | Obstacles/walls invisible in every non-debug render (geom group 4) | [obstacles-invisible-geomgroup4](2026-07-18_obstacles-invisible-geomgroup4.md) |
 
 Naming convention: `YYYY-MM-DD_short-slug.md`.
