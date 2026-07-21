@@ -9,9 +9,22 @@
   memristive devices. (In proposal — nearest predecessor.)
 - **Juarez-Lora et al. (2022)** — R-STDP arm control under changing friction. (In proposal.)
 
-## SNN + RL and continuous control (baseline/context)
-- **Exploring SNNs for deep RL in robotic tasks (2024)**, *Scientific Reports* —
-  relevant to how our PPO/SNN comparison is framed.
+## SNN + RL and continuous control (the L-track core — spiking locomotion policy)
+- **PopSAN — Tang et al. (2020)**, CoRL, arXiv:2010.09635 — **the L-track foundation.**
+  Population-coded spiking actor + deep critic; learnable Gaussian input populations +
+  learnable population output decoder; integrates with PPO/TD3/SAC/DDPG; 140× less energy on
+  Loihi. Its RateSAN ablation = why we can't use a plain rate readout. Code:
+  https://github.com/combra-lab/pop-spiking-deep-rl · https://arxiv.org/abs/2010.09635
+- **Fully Spiking NN for Legged Robots — Wang/Wu et al. (2023)**, arXiv:2310.05022 — PopSAN on
+  A1/Cassie/MIT-Humanoid in Isaac Gym (RMA+AMP); nearest prior work to the L-track; SNN ≈ ANN
+  across terrains. https://arxiv.org/abs/2310.05022
+- **MDC-SAN (AAAI 2022)** — population coding + 2nd-order dynamic neurons; SOTA upgrade option
+  (L6). https://ojs.aaai.org/index.php/AAAI/article/view/19879
+- **ILC-SAN — Chen et al. (2024)** — first *fully* spiking actor (membrane-voltage action decode
+  + intralayer connections) matching deep RL; SOTA upgrade option (L6).
+- **Noisy Spiking Actor Network (2024)**, arXiv:2403.04162 — spiking exploration; option if PPO
+  exploration is weak. https://arxiv.org/abs/2403.04162
+- **Exploring SNNs for deep RL in robotic tasks (2024)**, *Scientific Reports* — framing.
   https://www.nature.com/articles/s41598-024-77779-8
 - **SNNs for Continuous Control via end-to-end training (2025)**, arXiv:2509.05356.
   https://arxiv.org/abs/2509.05356

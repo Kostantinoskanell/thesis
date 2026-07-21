@@ -336,5 +336,46 @@ for the H2 energy claim.
 
 ---
 
+## D11. Spiking locomotion actor: rate readout vs population coding (RESOLVED — PopSAN population coding)
+
+**Context (L-track):** training a *spiking* Go2 locomotion policy with RL (Isaac Lab / rsl_rl
+PPO) so plasticity can reach the gait (M4c ice ceiling). First cut (`spiking_actor.py`, L2)
+used a plain firing-rate readout over the last hidden layer.
+
+**Lit review (2026-07-21) — thorough read of the SOTA:**
+- **PopSAN** (Tang et al. 2020, arXiv:2010.09635; code combra-lab/pop-spiking-deep-rl): the
+  canonical spiking actor for continuous-control DRL. **Population coding** on both ends —
+  each observation dim is encoded by a population of neurons with *learnable Gaussian
+  receptive fields* (μ,σ trainable), and each action dim is decoded from its own output
+  population by *learnable weights* over the T-step firing rate. Hybrid: **spiking actor +
+  deep-MLP critic**; integrates with DDPG/TD3/SAC and **PPO** (actor predicts the action mean,
+  trained by the clipped surrogate loss). Matches deep actors on MuJoCo control; 140× less
+  energy on Loihi vs Jetson TX2.
+- **Key ablation (decisive for us):** PopSAN's own "RateSAN" baseline — single neuron per dim,
+  rate-coded, i.e. **exactly our L2 v1** — *failed to match* the deep actor even at T=25
+  (5× more timesteps), due to limited single-neuron representation capacity. Learnable
+  population encoders measurably increased separation between observation encodings.
+- **Fully Spiking NN for Legged Robots** (Wang/Wu et al. 2023, arXiv:2310.05022): applies
+  PopSAN to A1 quadruped / Cassie / MIT Humanoid in Isaac Gym (RMA+AMP), current-based LIF,
+  surrogate-grad; SNN ≈ ANN (humanoid sometimes better) across pyramids/stairs/stones. The
+  closest prior work to the L-track.
+- **MDC-SAN** (AAAI 2022): population coding + 2nd-order dynamic neurons; beats the deep actor.
+- **ILC-SAN** (Chen et al. 2024): first *fully* spiking (membrane-voltage action decode +
+  intralayer output connections) to match mainstream deep RL.
+
+**Decision:** rebuild the actor as **PopSAN-style population coding** (L2b) — learnable Gaussian
+input populations + population output decoder + current-based LIF, T=5, deep-MLP critic. Keep
+the L2 rate-readout net as the "why population coding was needed" ablation (mirrors our nav-layer
+strong-and-fair discipline, D7). MDC-SAN / ILC-SAN logged as SOTA upgrades (L6) if PopSAN
+underperforms the MLP baseline (reward 36.25). Plasticity sites for the later R-STDP gait-recovery
+experiment (L4) = the population/hidden weight matrices.
+
+**Why not jump straight to ILC-SAN (the most SOTA):** PopSAN has public code, an explicit PPO
+integration, and *legged-robot validation*; it is the lowest-risk path to a working spiking
+locomotion policy on our exact stack. ILC-SAN's fully-spiking decode is a bigger, less-validated
+build — defer to L6.
+
+---
+
 _Update this log whenever a new SOTA option is identified. Every "we chose the simpler
 thing" must have an entry saying why and when to revisit._
