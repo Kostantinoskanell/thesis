@@ -15,7 +15,7 @@ orig = "        runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=log_di
 patch = (
     "        _sp = agent_cfg.to_dict()\n"
     "        _sp[\"actor\"][\"class_name\"] = \"nmc.locomotion.rsl_rl_spiking:SpikingActorMLPModel\"\n"
-    "        _sp[\"actor\"].update({\"in_pop\": 10, \"out_pop\": 10, \"spiking_T\": 5})\n"
+    "        _sp[\"actor\"].update({\"in_pop\": 10, \"out_pop\": 10, \"spiking_T\": 8, \"obs_normalization\": True})\n"
     "        import pprint; print(\"[SPIKING] actor cfg ->\"); pprint.pprint(_sp[\"actor\"])\n"
     "        runner = OnPolicyRunner(env, _sp, log_dir=log_dir, device=agent_cfg.device)"
 )
