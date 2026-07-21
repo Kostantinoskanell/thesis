@@ -308,5 +308,33 @@ significance and can tune anchor/η.
 
 ---
 
+## D10. Extra M4b baseline: TM-NORM (reward-free threshold calibration)  (RESOLVED — add as 6th controller)
+
+**Question:** R-STDP's recovery under sensor dropout could in principle be mostly
+*statistical renormalization* to the corrupted input's new scale, rather than genuine
+reward-driven relearning. Is there a cheap way to rule this out?
+
+**Found:** Zhao et al. 2025 ([snn_learning.md](snn_learning.md), arXiv:2505.05375) —
+**Threshold Modulation (TM-NORM)**: an online test-time adaptation method for SNNs that
+recalibrates each neuron's firing threshold from an EMA of its own membrane-potential
+mean/variance (batch-norm-on-the-membrane-potential, re-parameterized into the threshold).
+**No backprop, no reward signal, no weight update at all** — pure unsupervised statistical
+calibration, trivial to bolt onto the existing ALIF cells.
+
+**Decision:** add **TM-NORM as a 6th controller** in M4b/M5. If it recovers close to
+R-STDP's 30% under the same sensor-dropout shift, that undercuts the "reward-modulated
+plasticity" claim (H1) — the recovery would be attributable to renormalization, not
+learning. If it recovers substantially less, that's direct evidence the reward-driven part
+of R-STDP is doing real work. Either outcome strengthens the thesis's honesty; this is a
+cheap, sharp stress test (no training loop needed, just EMA stat tracking at inference
+time), so there is no reason not to run it before claiming H1.
+
+**Also adopted (M6):** the same paper's energy-accounting method — per-operation counts
+(MACs/ACs/MULs) × published per-op energy costs (Horowitz 2014, 45nm: 0.9pJ/AC, 3.7pJ/MUL,
+4.6pJ/MAC) — replaces a bare firing-rate percentage with an actual µJ-per-decision estimate
+for the H2 energy claim.
+
+---
+
 _Update this log whenever a new SOTA option is identified. Every "we chose the simpler
 thing" must have an entry saying why and when to revisit._

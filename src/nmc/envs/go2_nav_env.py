@@ -50,19 +50,34 @@ class Go2NavConfig:
     seed: int = 0
     sensor_noise_std: float = 0.0    # additive Gaussian on lidar (robustness sweep)
 
-    # -- distribution-shift type (M4). The mid-episode shift can be one of:
-    #   "obstacles" : density doubling (weak -- mapping stays valid, just harder)
-    #   "sensor"    : a contiguous block of LiDAR beams fails (dead = max range) --
-    #                 corrupts the navigator's INPUT so the pretrained mapping is
-    #                 wrong (strong test; the proposal's "sensor degradation")
-    #   "terrain"   : floor friction changes road->ice/sand -- a DYNAMICS shift the
-    #                 navigator sees only via its v/omega channels (medium test;
-    #                 precedent: Juarez-Lora 2022 changing-friction R-STDP)
+    # -- distribution-shift type (M4/M4b). The mid-episode shift can be one of:
+    #   "obstacles"    : density doubling (weak -- mapping stays valid, just harder)
+    #   "sensor"       : a contiguous block of LiDAR beams fails (dead = max range) --
+    #                    corrupts the navigator's INPUT so the pretrained mapping is
+    #                    wrong (strong test; the proposal's "sensor degradation";
+    #                    M4's adopted shift)
+    #   "terrain"      : floor friction changes road->ice/sand -- a DYNAMICS shift the
+    #                    navigator sees only via its v/omega channels (medium test;
+    #                    precedent: Juarez-Lora 2022 changing-friction R-STDP; M4
+    #                    tried this and found ice too harsh / sand too mild)
+    #   "sensor_bias"  : every LiDAR beam reads `lidar_bias_m` closer than reality --
+    #                    a systematic miscalibration/drift fault (distance-independent,
+    #                    unlike dropout's angle-dependent failure)
+    #   "sensor_range" : LiDAR's effective range shrinks to `sensor_range_m`; real
+    #                    obstacles beyond that silently read as "nothing there" --
+    #                    a fog/dust-style range degradation (near-field still correct)
+    #   "goal_drift"   : the robot's own heading estimate is biased by `goal_drift_rad`
+    #                    before computing heading_err -- a compass/IMU-drift fault,
+    #                    corrupts a DIFFERENT modality than LiDAR (goal-sensing, not
+    #                    obstacle-sensing), testing whether recovery generalizes
     shift_type: str = "obstacles"
     sensor_dropout_frac: float = 0.35   # fraction of contiguous beams killed at shift
     sensor_dropout_start: int = -1      # first dead beam index; -1 = random per episode
     terrain_mode: str = "ice"           # "ice" (low friction) | "sand" (high friction)
     terrain_friction: dict = None       # {"ice":0.08,"sand":1.6}; None -> defaults
+    lidar_bias_m: float = 1.5           # sensor_bias: constant range under-report
+    sensor_range_m: float = 3.0         # sensor_range: effective max range post-shift
+    goal_drift_rad: float = 0.6         # goal_drift: heading-estimate bias (~34 deg)
 
 
 # Discrete action -> velocity command [vx, vy, omega] for the RL walker.
@@ -269,7 +284,13 @@ class Go2NavEnv:
             lidar = np.clip(lidar, 0.0, 1.0)
         pos, yaw = self._robot_pose()
         goal_vec = self.goal - pos
-        goal_ang = np.arctan2(goal_vec[1], goal_vec[0]) - yaw
+        apparent_yaw = yaw
+        if self._shifted and self.cfg.shift_type == "goal_drift":
+            # Compass/IMU-drift fault: the robot's own heading estimate is biased,
+            # so heading_err is wrong even though goal_vec (world-frame) is not --
+            # corrupts a different modality (self-localization) than LiDAR.
+            apparent_yaw = yaw + self.cfg.goal_drift_rad
+        goal_ang = np.arctan2(goal_vec[1], goal_vec[0]) - apparent_yaw
         heading_err = np.arctan2(np.sin(goal_ang), np.cos(goal_ang))
         s = self.bot.base_state()
         extra = np.array([goal_vec[0], goal_vec[1], heading_err,
@@ -297,7 +318,15 @@ class Go2NavEnv:
             d = mujoco.mj_ray(self.model, self.data, pnt, vec,
                               self._raygroup, 1, -1, geomid)
             dists[i] = rng_m if d < 0 else min(d, rng_m)
+        if self._shifted and self.cfg.shift_type == "sensor_bias":
+            # Systematic miscalibration: every beam under-reports range by a fixed
+            # amount (distance-independent, unlike dropout's angle-dependent fault).
+            dists = np.maximum(dists - self.cfg.lidar_bias_m, 0.0)
         out = np.clip(dists / rng_m, 0.0, 1.0)
+        if self._shifted and self.cfg.shift_type == "sensor_range":
+            # Fog/dust-style range loss: real obstacles beyond the shrunk effective
+            # range silently read as "nothing there"; near-field stays correct.
+            out[dists > self.cfg.sensor_range_m] = 1.0
         if self._dead_beams is not None:      # failed beams read max range ("nothing")
             out[self._dead_beams] = 1.0
         return out
@@ -321,7 +350,7 @@ class Go2NavEnv:
                                    "vel": np.array([spd * np.cos(ang), spd * np.sin(ang)])})
 
     def _inject_shift(self):
-        """Dispatch the mid-episode distribution shift by type (M4)."""
+        """Dispatch the mid-episode distribution shift by type (M4/M4b)."""
         t = self.cfg.shift_type
         if t == "obstacles":
             self._inject_obstacles()
@@ -329,6 +358,8 @@ class Go2NavEnv:
             self._inject_sensor()
         elif t == "terrain":
             self._inject_terrain()
+        elif t in ("sensor_bias", "sensor_range", "goal_drift"):
+            pass  # purely gated by self._shifted + shift_type in _raycast_lidar/_observation
         else:
             raise ValueError(f"unknown shift_type {t!r}")
 
