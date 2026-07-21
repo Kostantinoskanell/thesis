@@ -22,11 +22,54 @@ recovery experiment (L4).
 
 from __future__ import annotations
 
+import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from nmc.locomotion.spiking_actor import spike  # fast-sigmoid surrogate spike
+class _RectSurrogateSpike(torch.autograd.Function):
+    """PopSAN's hidden/output-layer surrogate (Tang et al. 2020 code, PseudoSpikeRect):
+    a WIDE rectangular gradient window, constant magnitude 1 inside +-`window` of
+    threshold, 0 outside. Diffing our first attempt (fast-sigmoid, slope=25) against
+    this reference showed ours is ~36x weaker at a typical |v-thr|=0.2 -- through a
+    3-layer x T-step unrolled graph that compounds into near-vanishing gradients,
+    the likely dominant cause of the L3 performance plateau (D12)."""
+
+    @staticmethod
+    def forward(ctx, x, window):
+        ctx.save_for_backward(x)
+        ctx.window = window
+        return (x > 0).to(x.dtype)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        (x,) = ctx.saved_tensors
+        mask = (x.abs() < ctx.window).to(x.dtype)
+        return grad_output * mask, None
+
+
+def rect_spike(x: torch.Tensor, window: float = 0.5) -> torch.Tensor:
+    return _RectSurrogateSpike.apply(x, window)
+
+
+class _StraightThroughSpike(torch.autograd.Function):
+    """PopSAN's ENCODER surrogate (PseudoEncoderSpikeRegular): forward = hard
+    threshold, backward = pure pass-through (grad_input = grad_output, no gating at
+    all). Only the mu/sigma params need gradient here, so an unconditional
+    straight-through estimator is what the reference uses."""
+
+    @staticmethod
+    def forward(ctx, x):
+        return (x > 0).to(x.dtype)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return grad_output.clone()
+
+
+def encoder_spike(x: torch.Tensor) -> torch.Tensor:
+    return _StraightThroughSpike.apply(x)
 
 
 class PopSpikingActorNet(nn.Module):
@@ -34,26 +77,35 @@ class PopSpikingActorNet(nn.Module):
                  in_pop: int = 10, out_pop: int = 10, T: int = 5,
                  d_c: float = 0.5, d_v: float = 0.75, v_th: float = 0.5,
                  enc_min: float = -3.0, enc_max: float = 3.0,
-                 surrogate_slope: float = 25.0, weight_gain: float = 3.0):
+                 enc_sigma: float = 0.3872983,   # sqrt(0.15) -- PopSAN reference (Tang et al. 2020 code)
+                 surrogate_window: float = 0.5,  # PopSAN's SPIKE_PSEUDO_GRAD_WINDOW (rect surrogate, D12)
+                 weight_gain: float = 3.0,
+                 actor_lr_scale: float = 0.1,    # PopSAN uses actor_lr=1e-5 vs critic_lr=1e-4 (10x gap);
+                 decoder_tanh: bool = True, dec_out_scale: float = 1.0,  # PopSAN squashes mu via tanh (D12)
+                 **_ignored):                    # emulate via a backward-hook gradient scale (D12)
         super().__init__()
         self.obs_dim = obs_dim
         self.act_dim = act_dim
         self.in_pop = in_pop
         self.out_pop = out_pop
         self.T = T
+        self.surrogate_window = surrogate_window
+        self.decoder_tanh = decoder_tanh
+        self.dec_out_scale = dec_out_scale
         self.d_c = d_c
         self.d_v = d_v
         self.v_th = v_th
-        self.slope = surrogate_slope
 
         # --- learnable Gaussian input populations (mu, sigma per obs dim x neuron) ---
         # mu init: evenly spread across the (normalized) obs range so the populations
-        # tile the input space; sigma init large (spacing) for non-zero activity.
+        # tile the input space. sigma init = PopSAN's tuned value (was a spacing-derived
+        # guess ~1.7x too wide, over-smoothing/overlapping the receptive fields -- D12).
         mu0 = torch.linspace(enc_min, enc_max, in_pop).unsqueeze(0).repeat(obs_dim, 1)
         self.mu = nn.Parameter(mu0)                                    # (N, P_in)
-        spacing = (enc_max - enc_min) / max(in_pop - 1, 1)
+        raw_sigma0 = math.log(math.exp(enc_sigma) - 1.0)                # invert softplus
         self._raw_sigma = nn.Parameter(torch.full((obs_dim, in_pop),
-                                                   float(spacing)))     # softplus -> sigma>0
+                                                   float(raw_sigma0)))  # softplus -> sigma>0
+        self._actor_lr_scale = actor_lr_scale
 
         # --- current-based LIF hidden layers (bias-free = R-STDP plastic sites) ---
         dims = [obs_dim * in_pop, *hidden, act_dim * out_pop]
@@ -72,6 +124,16 @@ class PopSpikingActorNet(nn.Module):
         # --- learnable population decoder: action_i = W_d^i . fr^i + b_d^i ----------
         self.dec_w = nn.Parameter(torch.randn(act_dim, out_pop) * 0.1)  # (M, P_out)
         self.dec_b = nn.Parameter(torch.zeros(act_dim))                 # (M,)
+
+        # PopSAN's reference PPO hyperparameters use actor_lr=1e-5 vs critic_lr=1e-4 --
+        # a deliberate 10x-gentler step for the spiking actor (surrogate gradients are
+        # noisier than true gradients). rsl_rl/Isaac Lab PPO has ONE shared optimizer
+        # LR for actor+critic, so we emulate the ratio via a backward-hook gradient
+        # scale on every spiking-actor parameter -- framework-agnostic, no optimizer
+        # surgery needed, and it composes with whatever LR schedule PPO applies (D12).
+        if actor_lr_scale != 1.0:
+            for p in self.parameters():
+                p.register_hook(lambda g, s=actor_lr_scale: g * s)
 
     @property
     def sigma(self) -> torch.Tensor:
@@ -102,14 +164,14 @@ class PopSpikingActorNet(nn.Module):
         for _t in range(self.T):
             # 1) encoder: deterministic soft-reset IF driven by constant A_E
             v_enc = v_enc + a_e
-            enc_spk = spike(v_enc - thr_enc, self.slope)
+            enc_spk = encoder_spike(v_enc - thr_enc)
             v_enc = v_enc - enc_spk * thr_enc
             x = enc_spk                                        # (B, N*P_in)
             # 2) current-based LIF hidden + output layers
             for k, fc in enumerate(self.fc):
                 cur[k] = self.d_c * cur[k] + fc(x) + self.bias[k]
                 volt[k] = self.d_v * volt[k] * (1.0 - spk_prev[k]) + cur[k]
-                s_k = spike(volt[k] - self.v_th, self.slope)
+                s_k = rect_spike(volt[k] - self.v_th, self.surrogate_window)
                 spk_prev[k] = s_k
                 x = s_k
             out_spike_sum = out_spike_sum + x                  # accumulate output spikes
@@ -117,6 +179,13 @@ class PopSpikingActorNet(nn.Module):
         fr = out_spike_sum / float(self.T)                     # (B, M*P_out) firing rate
         fr = fr.view(B, self.act_dim, self.out_pop)            # (B, M, P_out)
         action = (fr * self.dec_w).sum(-1) + self.dec_b        # (B, M)
+        if self.decoder_tanh:
+            # PopSAN's reference decoder squashes the action MEAN through tanh
+            # ("Squashed Gaussian ... Spike Actor") -- an unbounded mean can get
+            # pushed to an extreme value early (weak/noisy spiking gradients) and
+            # get stuck there, since the escaping gradient is itself weak at
+            # extremes. Bounding removes that failure mode (D12).
+            action = torch.tanh(action) * self.dec_out_scale
         return action
 
     @torch.no_grad()

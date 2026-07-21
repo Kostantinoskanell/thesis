@@ -38,7 +38,10 @@ class SpikingActorMLPModel(MLPModel):
                  obs_normalization: bool = False, distribution_cfg=None,
                  in_pop: int = 10, out_pop: int = 10, spiking_T: int = 5,
                  neuron_d_c: float = 0.5, neuron_d_v: float = 0.75,
-                 v_th: float = 0.5, weight_gain: float = 3.0, **_ignored):
+                 v_th: float = 0.5, weight_gain: float = 3.0,
+                 enc_sigma: float = 0.3872983, actor_lr_scale: float = 0.1,
+                 decoder_tanh: bool = True, dec_out_scale: float = 1.0,
+                 **_ignored):
         # Build the standard MLPModel first (obs handling, normalizer, distribution,
         # and a throwaway MLP body we immediately replace).
         super().__init__(obs, obs_groups, obs_set, output_dim,
@@ -56,6 +59,8 @@ class SpikingActorMLPModel(MLPModel):
             obs_dim=in_dim, act_dim=out_dim, hidden=tuple(hidden_dims),
             in_pop=in_pop, out_pop=out_pop, T=spiking_T,
             d_c=neuron_d_c, d_v=neuron_d_v, v_th=v_th, weight_gain=weight_gain,
+            enc_sigma=enc_sigma, actor_lr_scale=actor_lr_scale,
+            decoder_tanh=decoder_tanh, dec_out_scale=dec_out_scale,
         )
         # MLPModel calls distribution.init_mlp_weights(self.mlp) on the ANN body; it
         # assumes an nn.Sequential MLP and doesn't apply to the spiking net, which

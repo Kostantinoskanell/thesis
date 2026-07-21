@@ -377,5 +377,57 @@ build — defer to L6.
 
 ---
 
+## D12. L3 spiking-policy tuning: reference-grounded fixes tried, none broke the ceiling (OPEN — documented negative result)
+
+**Context:** L3's first full run (2048 envs, 1500 iters) trained clean but hit reward
+**0.68** vs the MLP baseline's **36.25** (vel-err 1.38 vs 0.16 m/s). Diffed the actor
+line-by-line against the actual PopSAN PPO reference source (Tang et al. 2020 code,
+`popsan_drl/popsan_ppo/popsan.py`) to find principled, grounded fixes rather than guess.
+
+**Fixes found and tried, each isolated in its own 400-iter run (2048 envs) for a fair
+apples-to-apples comparison — the MLP baseline reaches reward 33.45 by iteration 400
+(94% of its final 36.25), so 400 iters is enough to see if a fix is working:**
+
+| config | reward @ iter 400 |
+|---|---|
+| v1: no fixes (obs_normalization=False) | 0.68 (@1500 iters — worse budget) |
+| **v1.5: `obs_normalization=True` + T 5→8 only** | **2.9 — best result found** |
+| v2: + encoder σ→0.387 (was ~0.667, spacing-derived) + actor-grad×0.1 | 2.1–2.3 |
+| v3: + rectangular surrogate (replacing fast-sigmoid) + actor-grad×0.1 | 1.9 |
+| v4: rectangular surrogate + actor-grad×1.0 (no LR cut) | 1.8–2.7 |
+| v5: rectangular surrogate + actor-grad×1.0 + tanh-bounded decoder | 0.82 — worse |
+
+**Each fix was independently well-grounded** (not guessed): σ and the actor/critic LR
+gap are literal reference hyperparameters (`std=sqrt(0.15)`, `actor_lr=1e-5` vs
+`critic_lr=1e-4`, a 10x gap emulated here via a backward-hook gradient scale since
+rsl_rl/Isaac Lab PPO has one shared LR). The rectangular surrogate replaces a fast-
+sigmoid(slope=25) shown to be ~36x weaker than PopSAN's window at a typical
+|v-threshold|=0.2 — a real vanishing-gradient risk through a 3-layer x T=8 unrolled
+graph. The tanh bound matches the reference decoder's `output_activation=nn.Tanh`
+("Squashed Gaussian ... Spike Actor") exactly.
+
+**Result: none of them helped; some made it slightly worse.** This rules out σ,
+actor-LR, surrogate shape, and decoder bounding as *the* dominant bottleneck (each
+alone or combined). It does NOT rule out: (a) a real implementation bug not yet found
+despite a careful line-by-line diff, (b) a genuine mismatch between PopSAN's validated
+scale (small classic-control Gym tasks: obs≤111 dims, act≤8 dims) and Go2 locomotion's
+harder regime (obs=48, act=12, contact-rich dynamics, reward shaping tuned for the MLP),
+or (c) a training-length gap larger than 400 iters can reveal — untested: the single
+best config (v1.5) has never been run to the full 1500 to see if it's slower-but-still-
+climbing rather than truly plateaued.
+
+**Decision:** keep this a documented, honest open finding rather than a silent stall.
+**Next diagnostic (highest value, not yet run):** v1.5 config to the full 1500 iters.
+If it's still ~3 at 1500, the bottleneck is structural, not a training-length issue, and
+the next lever is a harder look at (b) — likely larger `out_pop`/`in_pop` or a
+GAE/advantage-normalization interaction specific to a slow-changing spiking policy,
+rather than more neuron-level tuning. If it climbs substantially, L3 just needs a much
+longer training budget than the MLP does. Either answer is useful, citable evidence for
+the thesis's L-track write-up (a real finding either way — spiking population-coded
+policies for legged locomotion need substantially more tuning/iterations than a
+same-sized ANN, even reproducing the reference authors' own tuned hyperparameters).
+
+---
+
 _Update this log whenever a new SOTA option is identified. Every "we chose the simpler
 thing" must have an entry saying why and when to revisit._
