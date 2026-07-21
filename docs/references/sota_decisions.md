@@ -417,15 +417,22 @@ best config (v1.5) has never been run to the full 1500 to see if it's slower-but
 climbing rather than truly plateaued.
 
 **Decision:** keep this a documented, honest open finding rather than a silent stall.
-**Next diagnostic (highest value, not yet run):** v1.5 config to the full 1500 iters.
-If it's still ~3 at 1500, the bottleneck is structural, not a training-length issue, and
-the next lever is a harder look at (b) — likely larger `out_pop`/`in_pop` or a
-GAE/advantage-normalization interaction specific to a slow-changing spiking policy,
-rather than more neuron-level tuning. If it climbs substantially, L3 just needs a much
-longer training budget than the MLP does. Either answer is useful, citable evidence for
-the thesis's L-track write-up (a real finding either way — spiking population-coded
-policies for legged locomotion need substantially more tuning/iterations than a
-same-sized ANN, even reproducing the reference authors' own tuned hyperparameters).
+**Attempted the full-1500-iter diagnostic; hit a practical wall, not a scientific
+answer.** The run (v6, the v4-equivalent config) measured ~59s/iter after iteration 75
+— at that rate 1500 iters is ~24h, not the ~75min the earlier 400-iter runs suggested.
+GPU was healthy (85% util, 54°C, no memory pressure, no competing processes) — the
+likely explanation is that iteration-rate was never precisely measured across this
+session's many overlapping background checks (rough elapsed-time sampling, not a timed
+benchmark), so the 400-iter runs' true wall-clock cost may have been underestimated
+throughout. Killed the run rather than block on an unbounded wait.
+**Next diagnostic (still the highest-value open item, needs a clean/short session, not
+a marathon one):** re-run the best config (v4-equivalent, `decoder_tanh=False`) with
+an actual **timed** iteration-rate measurement from iteration 0 (e.g. `time.time()`
+deltas logged every N iters) before committing to a long run, so the iters-per-hour
+budget is known up front rather than assumed. If a realistic-length run still plateaus
+near reward 3, the bottleneck is structural (D12's (b): likely `out_pop`/`in_pop` size
+or a GAE/advantage-normalization interaction with a slow-changing spiking policy). If
+it climbs substantially given proper time, L3 just needs a longer budget than the MLP.
 
 ---
 
