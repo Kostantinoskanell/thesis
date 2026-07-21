@@ -38,7 +38,7 @@ class SpikingActorMLPModel(MLPModel):
                  obs_normalization: bool = False, distribution_cfg=None,
                  in_pop: int = 10, out_pop: int = 10, spiking_T: int = 5,
                  neuron_d_c: float = 0.5, neuron_d_v: float = 0.75,
-                 v_th: float = 0.5, weight_gain: float = 3.0):
+                 v_th: float = 0.5, weight_gain: float = 3.0, **_ignored):
         # Build the standard MLPModel first (obs handling, normalizer, distribution,
         # and a throwaway MLP body we immediately replace).
         super().__init__(obs, obs_groups, obs_set, output_dim,
