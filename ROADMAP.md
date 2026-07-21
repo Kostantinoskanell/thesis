@@ -73,6 +73,23 @@ stand, policy to walk). See [docs/references/locomotion.md](docs/references/loco
 Then M2–M8 (below) run on the D3 dynamic env. Real-Go2 deploy (SDK sport mode) is a
 final integrated/hardware demo after the science.
 
+### L-track: spiking locomotion layer (opened 2026-07-21, motivated by M4c)
+M4c showed R-STDP on the *navigation* layer recovers on sand but not ice — because it
+can only recalibrate velocity *commands*, not the gait itself (slipping is below its
+interface). This track extends the SNN + plasticity DOWN into locomotion: train a
+**spiking** Go2 policy with RL, then release it to R-STDP for online gait adaptation.
+Chose **Isaac Lab (rsl_rl PPO)** over reusing the brax pipeline (one PyTorch SNN codebase;
+the student leaned SOTA/PyTorch). Isaac Lab's stated req (32GB RAM / 16GB VRAM) is ~2× the
+lab laptop, but **it runs fine** — the blockers were all env plumbing, not capacity.
+| # | Milestone | Exit criterion | Status |
+|---|-----------|----------------|--------|
+| L0 | Isaac Lab runs on the 8GB laptop | stock Go2 task trains headless w/o OOM | ✅ done — 4 plumbing fixes (headless launcher, LD_LIBRARY_PATH incl. `/usr/lib/wsl/lib`, apt X11/GL libs, MSYS/CRLF); `scripts/wsl_isaac_go2_smoke.sh`; war story in debug-log |
+| L1 | Baseline (MLP) Go2 policy trained, pipeline proven | walking policy, reward converged | ✅ done — 2048 envs (3.1GB VRAM), 1500 iters, reward −6→**36.25**, vel-tracking err **0.16 m/s**; `scripts/wsl_isaac_go2_train.sh`, ckpt `logs/rsl_rl/unitree_go2_flat/2026-07-21_15-04-18/` |
+| L2 | Spiking actor network (pure-torch, surrogate-grad) | forward + gradient-flow + sparsity verified | ✅ done — `src/nmc/locomotion/spiking_actor.py` (LIF/ALIF, ALIF 4.6% vs LIF 11.2% firing); unit-tested |
+| L3 | Spiking policy trained in Isaac Lab (rsl_rl `class_name` injection) | spiking Go2 walks, reward ≈ MLP baseline within a few % | ☐ **next** — wire SpikingActorNet into rsl_rl 5.x's restructured policy API (`resolve_callable` by qualified path; policy built inside PPO, needs act/evaluate/output_std/as_jit/as_onnx) |
+| L4 | Release spiking gait to R-STDP, test terrain recovery (ice) | R-STDP gait adaptation recovers on ice where nav-layer R-STDP couldn't (M4c) | ☐ |
+| L5 | Energy + FPGA implications of a spiking *locomotion* controller | SynOps vs MLP actor; feeds H2/H3 | ☐ |
+
 **Superseded:** the PyBullet A1 CPG walk (old "P1", `archive/P1_quadruped/`) — kept as a
 reference artifact; MuJoCo Go2 + RL policy replaces it.
 
