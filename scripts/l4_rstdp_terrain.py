@@ -46,6 +46,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--mode", choices=["baseline", "frozen_shift", "rstdp_shift", "retention"], required=True)
 parser.add_argument("--episodes", type=int, default=20)
 parser.add_argument("--friction", type=float, default=1.0, help="terrain static+dynamic friction (default 1.0)")
+parser.add_argument("--eta", type=float, default=0.05, help="R-STDP reward learning rate (D13 tuning)")
+parser.add_argument("--anchor", type=float, default=0.005, help="R-STDP elastic weight anchor strength")
+parser.add_argument("--plastic-layers", default="0,-1", help="comma-separated fc layer indices to make plastic")
 parser.add_argument("--ckpt", default="/home/hapos/IsaacLab/logs/rsl_rl/unitree_go2_flat/2026-07-22_03-21-45/model_1499.pt")
 parser.add_argument("--load-weights", default=None, help="load a previously-adapted mlp state_dict instead of --ckpt's")
 parser.add_argument("--save-weights", default=None, help="save the (possibly adapted) mlp state_dict here")
@@ -117,9 +120,12 @@ def main():
 
     ctrl = None
     if adapt:
-        cfg = STDPConfig(reward_modulated=True, eta=0.05, tau_e_ms=200.0)
-        ctrl = PopSpikingRSTDPController(net, plastic_layers=[0, len(net.fc) - 1],
-                                         stdp_cfg=cfg, anchor=0.005, reward_mode="td", device=device)
+        n_layers = len(net.fc)
+        plastic = [int(x) % n_layers for x in args_cli.plastic_layers.split(",")]
+        cfg = STDPConfig(reward_modulated=True, eta=args_cli.eta, tau_e_ms=200.0)
+        ctrl = PopSpikingRSTDPController(net, plastic_layers=plastic,
+                                         stdp_cfg=cfg, anchor=args_cli.anchor, reward_mode="td", device=device)
+        print(f"[L4] R-STDP: eta={args_cli.eta} anchor={args_cli.anchor} plastic_layers={plastic}", flush=True)
 
     obs_dict, _ = env.reset()
     ep_reward, ep_len = 0.0, 0

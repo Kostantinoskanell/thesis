@@ -561,10 +561,18 @@ architecture** -- the locomotion actor's plastic layers are much larger (fc[0] i
 more delicately-tuned structure (L3's own tuning journey showed it's sensitive to
 encoding scale, decoder bounds, surrogate shape under ordinary gradient descent) --
 Hebbian-correlation updates at the same eta may simply perturb it faster than gradient
-descent would. Untested next steps: smaller eta (e.g. 0.005, a 10x cut, mirroring how
-L3's own tuning journey required matching the reference's actor/critic LR ratio), fewer
-plastic layers (readout-only first, to isolate whether input-layer plasticity is
-specifically destabilizing here), or a stronger anchor.
+descent would. **Tested: smaller eta (0.005, a 10x cut) -- WRONG DIRECTION, rules out "eta too large."**
+Fall rate got WORSE, not better: 19/30 (63%) vs eta=0.05's 15/30 (50%). Since both a 10x
+larger and the original eta show similar-or-worse degradation, the step-size magnitude
+is not the primary lever -- something more structural is at play. **Untested next
+(higher-value now that eta is ruled out): fewer plastic layers** -- readout-only (D9's
+nav-layer lesson: readout-only *stalls* without helping, doesn't actively *hurt* --
+if that's also true here, it would isolate INPUT-layer plasticity specifically as the
+destabilizing factor, since perturbing the population encoder's stimulation pathway
+might break the delicately-tuned population code in ways gradient descent never would).
+Also untested: a much stronger anchor (current 0.005 may be too weak to counteract
+Hebbian drift at either eta tried), or gating (`gate_threshold`, suppress updates when
+the TD-error is small, currently disabled/0.0).
 
 ---
 
