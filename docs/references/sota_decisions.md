@@ -464,10 +464,31 @@ aren't perfectly aligned here, other reward terms likely diverge). **Conclusion:
 original lr=1e-3 (== the MLP's own tuned value) is the right magnitude; instability
 wasn't the limiting factor.** Best known config stays: `schedule="fixed"`, `lr=1e-3`.
 
-**Open question for a longer budget (in progress):** v9 saturates by iter ~700-800 at
-reward ~8 and stays flat — is 8 a hard structural ceiling for this architecture, or does
-it eventually break given substantially more training than the MLP needed? Testing the
-best config (lr=1e-3, fixed) extended to 3000 iterations (2x the MLP's own budget).
+**v11 (best config extended to 3000 iters, 2x the MLP's own budget): DEFINITIVE — reward
+~8 is a hard structural ceiling, not a training-length artifact.** Four measurement
+windows spanning iter 600-3000 are statistically indistinguishable: iter 600-800 mean
+7.92 (stdev 0.62), iter 1400-1600 mean 8.10 (stdev 0.56), iter 2200-2400 mean 8.09
+(stdev 0.55), last-100 (iter 2900-3000) mean 7.68 (stdev 0.61). Vel-err unchanged at
+1.447 m/s. **Doubling the training budget bought zero net progress a second time, now
+at 2x scale — this rules out "needs more time" conclusively.**
+
+**Overnight investigation, final summary (D12 closed as a completed empirical study):**
+1. Root cause of the ORIGINAL flatline (reward ~2.5, D12 first entries): PPO's adaptive
+   KL-based LR schedule crushing the spiking actor's effective learning rate early
+   (confirmed — fixing the schedule alone gave the entire ~3x gain below).
+2. Fix: `schedule="fixed"`, `learning_rate=1e-3` (== the MLP's own tuned value; a
+   gentler 3e-4 is worse, v10) — **real, reproducible, now 2x-training-length-verified
+   ceiling at reward ~8** (vs. the MLP's 36.25; vel-err 1.45 vs 0.16 m/s).
+3. Remaining gap (8 vs 36) is a genuine architectural/capacity limit of this exact
+   PopSAN configuration (pop sizes 10/10, hidden (256,256), T=8) on Go2's much harder
+   regime (48 obs, 12 continuous joints, contact-rich dynamics) than PopSAN's validated
+   scale (small classic-control Gym tasks, obs≤111, act≤8). Candidate next levers,
+   untested tonight, need a fresh session to prioritize: larger `in_pop`/`out_pop` (e.g.
+   20), larger hidden layers, more spiking timesteps T, or accepting this policy
+   (reward 8, stable, not falling) as a "walks passably, not competitively" substrate —
+   which may be SUFFICIENT for L4's actual question (does R-STDP gait-adaptation recover
+   RELATIVE performance under a terrain shift), since L4 cares about relative recovery
+   under shift, not matching the MLP's absolute walking quality.
 
 ---
 
