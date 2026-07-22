@@ -188,6 +188,50 @@ class PopSpikingActorNet(nn.Module):
             action = torch.tanh(action) * self.dec_out_scale
         return action
 
+    def forward_with_traces(self, obs: torch.Tensor, plastic_layers: list[int]):
+        """Like forward(), but also returns per-timestep pre/post spike traces for the
+        requested self.fc layer indices, for R-STDP eligibility-trace accumulation
+        (L4). pre[i] = input to fc[i] at each of the T steps (encoder spikes for i=0,
+        previous layer's spikes otherwise); post[i] = fc[i]'s own output spikes. Kept
+        separate from forward() so ordinary (non-plastic) training/inference pays no
+        extra bookkeeping cost."""
+        B = obs.shape[0]
+        dev, dt = obs.device, obs.dtype
+        a_e = self._encode_currents(obs)
+
+        v_enc = torch.zeros_like(a_e)
+        cur = [torch.zeros(B, fc.out_features, device=dev, dtype=dt) for fc in self.fc]
+        volt = [torch.zeros(B, fc.out_features, device=dev, dtype=dt) for fc in self.fc]
+        spk_prev = [torch.zeros(B, fc.out_features, device=dev, dtype=dt) for fc in self.fc]
+        out_spike_sum = torch.zeros(B, self.fc[-1].out_features, device=dev, dtype=dt)
+        pre_trace = {i: [] for i in plastic_layers}
+        post_trace = {i: [] for i in plastic_layers}
+
+        eps = 0.01
+        thr_enc = 1.0 - eps
+        for _t in range(self.T):
+            v_enc = v_enc + a_e
+            enc_spk = encoder_spike(v_enc - thr_enc)
+            v_enc = v_enc - enc_spk * thr_enc
+            x = enc_spk
+            for k, fc in enumerate(self.fc):
+                if k in pre_trace:
+                    pre_trace[k].append(x.detach())
+                cur[k] = self.d_c * cur[k] + fc(x) + self.bias[k]
+                volt[k] = self.d_v * volt[k] * (1.0 - spk_prev[k]) + cur[k]
+                s_k = rect_spike(volt[k] - self.v_th, self.surrogate_window)
+                spk_prev[k] = s_k
+                x = s_k
+                if k in post_trace:
+                    post_trace[k].append(x.detach())
+            out_spike_sum = out_spike_sum + x
+        fr = out_spike_sum / float(self.T)
+        fr = fr.view(B, self.act_dim, self.out_pop)
+        action = (fr * self.dec_w).sum(-1) + self.dec_b
+        if self.decoder_tanh:
+            action = torch.tanh(action) * self.dec_out_scale
+        return action, pre_trace, post_trace
+
     @torch.no_grad()
     def firing_rate(self, obs: torch.Tensor) -> float:
         """Mean hidden+output spike rate (H2 energy proxy), hard-threshold count."""

@@ -13,6 +13,7 @@ torch = pytest.importorskip("torch")
 
 from nmc.locomotion.spiking_actor import SpikingActorNet
 from nmc.locomotion.popsan_actor import PopSpikingActorNet
+from nmc.locomotion.popsan_rstdp import PopSpikingRSTDPController
 
 N, M, B = 48, 12, 8
 
@@ -62,3 +63,27 @@ def test_popsan_trains_on_regression():
     for _ in range(150):
         opt.zero_grad(); loss = ((net(X) - Y) ** 2).mean(); loss.backward(); opt.step()
     assert float(loss) < l0, "PopSAN failed to reduce the fitting loss"
+
+
+def test_rstdp_controller_updates_only_plastic_layers():
+    """L4: R-STDP must change the targeted (input+readout) layers and leave the
+    untargeted hidden layer alone."""
+    torch.manual_seed(0)
+    net = PopSpikingActorNet(N, M, hidden=(64, 64), in_pop=10, out_pop=10, T=6,
+                             decoder_tanh=False)
+    ctrl = PopSpikingRSTDPController(net, plastic_layers=[0, 2], anchor=0.005, reward_mode="td")
+    w0, w1, w2 = (net.fc[i].weight.detach().clone().numpy() for i in range(3))
+
+    rng = torch.Generator().manual_seed(1)
+    obs = torch.randn(N, generator=rng).numpy()
+    for _ in range(10):
+        a = ctrl.act(obs)
+        assert a.shape == (M,)
+        next_obs = torch.randn(N, generator=rng).numpy()
+        ctrl.learn(float(torch.randn(1, generator=rng)), next_obs=next_obs, done=False)
+        obs = next_obs
+
+    w0a, w1a, w2a = (net.fc[i].weight.detach().numpy() for i in range(3))
+    assert abs(w0a - w0).sum() > 0, "plastic input layer (0) did not change"
+    assert abs(w2a - w2).sum() > 0, "plastic readout layer (2) did not change"
+    assert (w1a == w1).all(), "non-plastic hidden layer (1) must be untouched"
