@@ -508,6 +508,30 @@ to a longer run to see if a genuinely higher-capacity network compounds its adva
 over time, unlike the original config (proven flat even at 2x the MLP's training
 length, v11). Testing hidden=256x3 extended to 1500 iters next.
 
+**v15 (hidden=256x3, full 1500 iters) result: same ceiling, different path.** Unlike the
+original config's hard early flatline (v9/v11: saturates by iter ~700, dead flat for
+2000+ more iterations), this one climbs slowly and is STILL RISING at iter 1400 (peak
+8.99) before a slight dip — last-100 mean **7.62**. Windowed means: iter300-400=6.40,
+iter600-800=6.90, iter1100-1300=7.77 — a real, if slow, upward drift the whole run,
+unlike the baseline's dead-flat plateau. Vel-err unchanged (1.404, matches every prior
+run's ~1.4-1.46). **Read: bigger hidden layers change the LEARNING DYNAMICS (slower,
+not-yet-saturated) but land in essentially the same ~7.6-8.0 final range at this budget
+— not a clear win, though the still-rising trajectory at iter 1400 leaves open whether
+more iterations than 1500 would separate it from the baseline's proven-flat ceiling.**
+
+**Consolidated read across the whole overnight+continuation investigation:** reward ≈8
+(vel-err ≈1.4 m/s) is a robust number that reappears across the default architecture (v9,
+2x-budget-verified flat), larger populations (v12), more timesteps (v14), and bigger
+hidden layers (v15, different path, same destination). This consistency across 4
+architectural variants is itself meaningful evidence that ~8 reflects something more
+fundamental about this PopSAN-on-Go2 setup than any single hyperparameter — likely the
+population/spiking encoding's fit to a 48-dim continuous-control observation space,
+rather than raw network capacity. Next real lever (untested, bigger undertaking, not a
+simple param sweep): a structurally different decode (ILC-SAN's fully-spiking
+membrane-voltage output + intralayer connections, or MDC-SAN's 2nd-order dynamic
+neurons — both already flagged as L6 options) — or accept ~8 and proceed to L4, since
+R-STDP gait-recovery only needs a policy that walks *some* way, not competitively.
+
 ---
 
 _Update this log whenever a new SOTA option is identified. Every "we chose the simpler
