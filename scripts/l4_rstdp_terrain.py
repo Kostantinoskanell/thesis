@@ -59,6 +59,7 @@ parser.add_argument("--video-dir", default="/home/hapos/l4_videos", help="output
 parser.add_argument("--dump-traj", default=None, help="save first-episode base pose + joint trajectory to this .npz (headless, no RTX render needed)")
 parser.add_argument("--force-command", default=None, help="override the velocity command the policy sees each step, 'vx,vy,yaw' (clean walk test)")
 parser.add_argument("--mlp-ckpt", default=None, help="eval the standard MLP baseline actor from this checkpoint instead of the spiking net (raw obs, no normalize, no tanh)")
+parser.add_argument("--T", type=int, default=8, help="spiking net timesteps (must match the trained checkpoint; L5 energy sweep uses T=4)")
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
 args_cli.headless = True
@@ -84,7 +85,8 @@ NET_KW = dict(obs_dim=48, act_dim=12, hidden=(128, 128, 128), in_pop=10, out_pop
 
 
 def load_actor(ckpt_path, weights_override=None, device="cuda:0"):
-    net = PopSpikingActorNet(**NET_KW).to(device)
+    kw = dict(NET_KW); kw["T"] = args_cli.T
+    net = PopSpikingActorNet(**kw).to(device)
     if weights_override:
         # a previously-adapted checkpoint saved by --save-weights: mlp weights +
         # normalizer stats bundled together in one plain state-dict blob.

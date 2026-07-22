@@ -39,6 +39,9 @@ def main():
     ap.add_argument("--in-pop", type=int, default=10)
     ap.add_argument("--out-pop", type=int, default=10)
     ap.add_argument("--T", type=int, default=8)
+    ap.add_argument("--firing-penalty", type=float, default=0.0,
+                    help="L5/H2 energy: coefficient on mean spike activity in the loss. "
+                         ">0 drives the net sparse (dense firing kills the SNN energy edge).")
     ap.add_argument("--device", default="cpu")
     args = ap.parse_args()
 
@@ -75,15 +78,23 @@ def main():
         print(f"warm-started from {args.init_weights}")
     opt = torch.optim.Adam(net.parameters(), lr=args.lr)
 
+    fp = args.firing_penalty
     for ep in range(args.epochs):
         net.train()
         idx = tr_idx[torch.randperm(tr_idx.shape[0])]
         tot = 0.0
+        act_tot = 0.0
         for i in range(0, idx.shape[0], args.batch):
             b = idx[i:i + args.batch]
             opt.zero_grad()
-            pred = net(X[b])
-            loss = ((pred - Y[b]) ** 2).mean()
+            if fp > 0.0:
+                pred, activity = net.forward_with_activity(X[b])
+                mse = ((pred - Y[b]) ** 2).mean()
+                loss = mse + fp * activity
+                act_tot += float(activity) * b.shape[0]
+            else:
+                pred = net(X[b])
+                loss = ((pred - Y[b]) ** 2).mean()
             loss.backward()
             opt.step()
             tot += float(loss) * b.shape[0]
@@ -92,7 +103,8 @@ def main():
             vpred = net(X[val_idx])
             vloss = float(((vpred - Y[val_idx]) ** 2).mean())
         if ep % 5 == 0 or ep == args.epochs - 1:
-            print(f"epoch {ep:3d}: train_mse {tot/idx.shape[0]:.5f}  val_mse {vloss:.5f}", flush=True)
+            extra = f"  mean_activity {act_tot/idx.shape[0]:.3f}" if fp > 0.0 else ""
+            print(f"epoch {ep:3d}: train_loss {tot/idx.shape[0]:.5f}  val_mse {vloss:.5f}{extra}", flush=True)
 
     blob = dict(net.state_dict())
     blob["_obs_mean"] = torch.as_tensor(mean)

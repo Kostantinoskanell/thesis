@@ -636,5 +636,48 @@ R-STDP gait-recovery only needs a policy that walks *some* way, not competitivel
 
 ---
 
+## D15. L5 energy (H2): the distilled spiking locomotion policy needs sparsity + minimal T to beat the MLP — and only marginally (RESOLVED — walking + energy-positive at T=5)
+
+**Question:** does the spiking *locomotion* controller (the L4 distilled PopSAN walker)
+actually cost less energy than the MLP baseline? The nav-layer ALIF-SNN fired at ~1.4% and
+was dramatically cheaper; H2 assumed locomotion inherits this. Method: SynOps vs MACs on
+real walking obs, 45 nm (Horowitz 2014), `scripts/l5_energy_analysis.py`. Every policy is
+re-verified to still walk by trajectory (path length + vx tracking + base height), never
+by reward.
+
+**Finding — the naive distilled walker is MORE expensive than the MLP:**
+| policy | firing | T | val-MSE | energy | vs MLP | walks? |
+|---|---|---|---|---|---|---|
+| dense (DAgger walker) | 62.7% | 8 | 0.025 | 328.9 nJ | **0.57× (costlier)** | ✅ |
+| + firing penalty λ=0.05 | 44.2% | 8 | 0.029 | 266.9 nJ | **0.70× (costlier)** | ✅ |
+| + penalty, **T=5** λ=0.03 | 47.7% | 5 | 0.038 | 178.1 nJ | **1.04× cheaper** | ✅ path 18.3 m |
+| + penalty, T=4 | 44.7% | 4 | 0.049 | 136.8 nJ | 1.36× cheaper | ❌ belly-flop |
+| MLP baseline | — | — | — | 186.1 nJ | 1.0× | ✅ |
+
+Two reasons it starts costlier: (1) **behavior cloning produces dense firing** (62.7%, vs
+nav's 1.4%) — BC matches actions, nothing rewards sparsity; (2) **population coding + T**:
+the encoder inflates obs 48→480 so `fc[0]` is 480×128, and every SynOp is paid T times.
+
+**Resolution — two levers, in order:** (a) added a differentiable mean-spike-activity term
+to the distillation loss (`PopSpikingActorNet.forward_with_activity` + `--firing-penalty`)
+→ halves firing (62.7%→44%) with negligible gait loss, but only reaches 0.70× (T=8 overhead
+dominates). (b) **T is the dominant energy knob but trades against gait fidelity** — T=4 is
+1.36× cheaper but breaks walking (val-MSE 0.049 → belly-flop). **T=5 is the minimum T that
+preserves the gait → 1.04× cheaper while still walking.** So H2 holds for locomotion, but
+only after sparsity regularization AND T minimization, and only by a thin margin.
+
+**Interpretation (the honest, thesis-grade point):** locomotion does NOT get the nav
+layer's order-of-magnitude energy win. Continuous precise motor control resists the
+sparse-firing regime (needs denser firing + several timesteps for action fidelity); coarse
+discrete navigation is naturally sparse. **This is the same message as D13** (R-STDP
+recovers navigation but destabilizes locomotion): the locomotion layer is a harder, more
+delicate substrate for neuromorphic methods than navigation — a nuanced, layer-specific
+contribution rather than a blanket "SNNs win everywhere." Caveat: 45 nm digital SynOps is a
+conservative proxy; on neuromorphic hardware (Loihi, PopSAN's ~140× vs GPU) the advantage
+is far larger — 1.04× is a digital-ASIC floor, not the neuromorphic ceiling. Full record +
+videos: `archive/L5_energy/`.
+
+---
+
 _Update this log whenever a new SOTA option is identified. Every "we chose the simpler
 thing" must have an entry saying why and when to revisit._
