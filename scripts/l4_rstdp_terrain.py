@@ -57,6 +57,7 @@ parser.add_argument("--video", action="store_true", help="record an rgb_array vi
 parser.add_argument("--video-length", type=int, default=1000, help="video length in steps")
 parser.add_argument("--video-dir", default="/home/hapos/l4_videos", help="output dir for videos")
 parser.add_argument("--dump-traj", default=None, help="save first-episode base pose + joint trajectory to this .npz (headless, no RTX render needed)")
+parser.add_argument("--force-command", default=None, help="override the velocity command the policy sees each step, 'vx,vy,yaw' (clean walk test)")
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
 args_cli.headless = True
@@ -151,8 +152,17 @@ def main():
     ep_reward, ep_len = 0.0, 0
     ep_rewards, ep_lens = [], []
 
+    force_cmd = None
+    if args_cli.force_command:
+        force_cmd = torch.tensor([float(x) for x in args_cli.force_command.split(",")],
+                                 device=device, dtype=torch.float32)
+        print(f"[L4] forcing velocity command (obs slots 9:12) = {force_cmd.tolist()}", flush=True)
+
     while len(ep_rewards) < args_cli.episodes:
         raw = obs_dict["policy"]
+        if force_cmd is not None:
+            raw = raw.clone()
+            raw[0, 9:12] = force_cmd     # velocity_commands slots the policy reads
         norm = normalize(raw, mean, std)
         if adapt:
             norm_np = norm.squeeze(0).detach().cpu().numpy()

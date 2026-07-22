@@ -28,7 +28,11 @@ env_patch = env_anchor + (
     "                                                  params={\"minimum_height\": _minh})\n"
     "        env_cfg.rewards.base_height = _RewTerm(func=_mdp.base_height_l2, weight=_hw,\n"
     "                                               params={\"target_height\": _tgth})\n"
-    "        print(f\"[SPIKING] anti-crouch: terminate<{_minh}m + base_height_l2(target={_tgth}, w={_hw})\")\n"
+    "        _vw = _oc.environ.get(\"SPIKING_VEL_WEIGHT\")\n"
+    "        if _vw:\n"
+    "            env_cfg.rewards.track_lin_vel_xy_exp.weight = float(_vw)\n"
+    "            env_cfg.rewards.track_ang_vel_z_exp.weight = float(_vw) * 0.5\n"
+    "        print(f\"[SPIKING] anti-crouch: terminate<{_minh}m + base_height_l2(target={_tgth}, w={_hw}), vel_w={_vw}\")\n"
 )
 assert env_anchor in s, "env_cfg anchor line not found"
 s = s.replace(env_anchor, env_patch, 1)
@@ -50,6 +54,9 @@ patch = (
     "        if _os.environ.get(\"SPIKING_FIXED_LR\") == \"1\":\n"
     "            _sp[\"algorithm\"][\"schedule\"] = \"fixed\"\n"
     "            _sp[\"algorithm\"][\"learning_rate\"] = float(_os.environ.get(\"SPIKING_LR\", \"1.0e-3\"))\n"
+    "        _ent = _os.environ.get(\"SPIKING_ENTROPY\")\n"
+    "        if _ent:\n"
+    "            _sp[\"algorithm\"][\"entropy_coef\"] = float(_ent)\n"
     "        import pprint; print(\"[SPIKING] actor cfg ->\"); pprint.pprint(_sp[\"actor\"])\n"
     "        print(\"[SPIKING] algorithm schedule ->\", _sp[\"algorithm\"].get(\"schedule\"),\n"
     "              \"lr ->\", _sp[\"algorithm\"].get(\"learning_rate\"))\n"
