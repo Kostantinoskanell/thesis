@@ -443,10 +443,22 @@ observed "climbs, then flatlines forever" shape. **v8: same best config +
 `algorithm.schedule="fixed"`, `learning_rate=1e-3` (constant, no adaptive shrink), 800
 iters: reward climbed 4.8→8.7 and was STILL rising near the end — no flatline** (vs.
 every adaptive-schedule run capping at ~2-3 by iter 400 and never moving again). **Best
-result yet, ~3x the adaptive-schedule ceiling, with no sign of plateauing** — this is
-the real fix. Full 1500-iter run (matching the MLP's own training length) launched for
-a true apples-to-apples final number. `SPIKING_FIXED_LR=1` env var toggles this in
-`scripts/wsl_isaac_go2_spiking.sh` / `make_isaac_train_spiking.py`.
+result yet, ~3x the adaptive-schedule ceiling.** `SPIKING_FIXED_LR=1` env var toggles
+this in `scripts/wsl_isaac_go2_spiking.sh` / `make_isaac_train_spiking.py`.
+
+**Full 1500-iter run (v9, true apples-to-apples vs. the MLP's own training length):**
+climbs steadily to iter ~600-800 (reward 7.8-8.1), then **settles into a stable plateau**
+for the remaining 700+ iterations — last-100-iter mean **8.08** (max 9.31, min 6.51,
+stdev 0.58), vel-err mean 1.46 m/s (still far from the MLP's 0.16). So: real, substantial,
+reproducible improvement (2.5→8, ~3x) — genuinely fixed the earlier hard-flatline
+pathology — but a new, higher plateau, not full convergence to MLP-level performance.
+
+**Read:** the *shape* changed from "flatline, zero variance" (adaptive schedule) to
+"oscillating plateau, real variance" (fixed schedule, stdev 0.58, swinging 6.5-9.3) —
+consistent with instability/noise at this fixed LR (1e-3, unchanged from the MLP's own
+tuned value) rather than a hard capacity ceiling. **Next, well-motivated test (not yet
+run): a gentler fixed LR** (e.g. 3e-4 or 1e-4) to see if reducing update noise lets it
+climb further past ~8 instead of oscillating in place.
 
 ---
 
