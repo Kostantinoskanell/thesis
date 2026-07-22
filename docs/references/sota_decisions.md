@@ -490,6 +490,24 @@ at 2x scale — this rules out "needs more time" conclusively.**
    RELATIVE performance under a terrain shift), since L4 cares about relative recovery
    under shift, not matching the MLP's absolute walking quality.
 
+**Architectural-lever sweep (v12-v14, 400-iter runs, same metric — last-50-iter mean
+within the first 400 iters — for a fair apples-to-apples comparison against the
+baseline's 6.06±0.61):**
+
+| lever | config | mean reward | stdev |
+|---|---|---|---|
+| baseline | pop=10/10, hidden 128×3, T=8 | 6.06 | 0.61 |
+| v12: larger populations | pop=20/20 | 6.05 | 0.62 — **no effect** |
+| v13: bigger hidden layers | hidden=256×3 | **6.63** | **0.50** — modest gain, more stable |
+| v14: more timesteps | T=16 | 5.95 | 0.69 — **no effect**, 2x compute cost |
+
+Doubling population size or spiking timesteps bought nothing — rules those out as the
+binding constraint. Bigger hidden layers gave a small, real-looking edge (both higher
+mean and lower variance, i.e. more consistent, not just a lucky draw) — worth extending
+to a longer run to see if a genuinely higher-capacity network compounds its advantage
+over time, unlike the original config (proven flat even at 2x the MLP's training
+length, v11). Testing hidden=256x3 extended to 1500 iters next.
+
 ---
 
 _Update this log whenever a new SOTA option is identified. Every "we chose the simpler
