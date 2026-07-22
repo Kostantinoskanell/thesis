@@ -58,6 +58,7 @@ parser.add_argument("--video-length", type=int, default=1000, help="video length
 parser.add_argument("--video-dir", default="/home/hapos/l4_videos", help="output dir for videos")
 parser.add_argument("--dump-traj", default=None, help="save first-episode base pose + joint trajectory to this .npz (headless, no RTX render needed)")
 parser.add_argument("--force-command", default=None, help="override the velocity command the policy sees each step, 'vx,vy,yaw' (clean walk test)")
+parser.add_argument("--mlp-ckpt", default=None, help="eval the standard MLP baseline actor from this checkpoint instead of the spiking net (raw obs, no normalize, no tanh)")
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
 args_cli.headless = True
@@ -125,13 +126,33 @@ def normalize(obs, mean, std, eps=1e-2):
     return (obs - mean) / (std + eps)
 
 
+def load_mlp(ckpt_path, device="cuda:0"):
+    """Rebuild the standard rsl_rl MLP baseline actor: 48->128->128->128->12 ELU,
+    action = mlp(raw_obs) (GaussianDistribution deterministic output is the mean;
+    no tanh; this baseline trained with obs_normalization=False -> raw obs)."""
+    import torch.nn as nn
+    mlp = nn.Sequential(
+        nn.Linear(48, 128), nn.ELU(), nn.Linear(128, 128), nn.ELU(),
+        nn.Linear(128, 128), nn.ELU(), nn.Linear(128, 12)).to(device)
+    asd = torch.load(ckpt_path, map_location=device, weights_only=False)["actor_state_dict"]
+    sd = {k[len("mlp."):]: v for k, v in asd.items() if k.startswith("mlp.")}
+    mlp.load_state_dict(sd)
+    mlp.eval()
+    return mlp
+
+
 def main():
     torch.manual_seed(args_cli.seed)
     device = "cuda:0"
-    net, mean, std = load_actor(args_cli.ckpt, args_cli.load_weights, device)
-    net.eval()
+    mlp_mode = args_cli.mlp_ckpt is not None
+    if mlp_mode:
+        net = load_mlp(args_cli.mlp_ckpt, device)
+        mean = std = None
+    else:
+        net, mean, std = load_actor(args_cli.ckpt, args_cli.load_weights, device)
+        net.eval()
 
-    adapt = args_cli.mode == "rstdp_shift"
+    adapt = args_cli.mode == "rstdp_shift" and not mlp_mode
     friction = args_cli.friction if args_cli.mode in ("frozen_shift", "rstdp_shift") else 1.0
     env = make_env(friction, device)
 
@@ -163,14 +184,18 @@ def main():
         if force_cmd is not None:
             raw = raw.clone()
             raw[0, 9:12] = force_cmd     # velocity_commands slots the policy reads
-        norm = normalize(raw, mean, std)
-        if adapt:
-            norm_np = norm.squeeze(0).detach().cpu().numpy()
-            action_np = ctrl.act(norm_np)
-            action = torch.as_tensor(action_np, device=device, dtype=torch.float32).unsqueeze(0)
-        else:
+        if mlp_mode:
             with torch.no_grad():
-                action = net(norm)
+                action = net(raw)         # MLP: raw obs in, mean out (no normalize/tanh)
+        else:
+            norm = normalize(raw, mean, std)
+            if adapt:
+                norm_np = norm.squeeze(0).detach().cpu().numpy()
+                action_np = ctrl.act(norm_np)
+                action = torch.as_tensor(action_np, device=device, dtype=torch.float32).unsqueeze(0)
+            else:
+                with torch.no_grad():
+                    action = net(norm)
 
         obs_dict, reward, terminated, truncated, info = env.step(action)
         done = bool(terminated[0] or truncated[0])
