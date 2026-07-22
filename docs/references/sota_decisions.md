@@ -456,9 +456,18 @@ pathology — but a new, higher plateau, not full convergence to MLP-level perfo
 **Read:** the *shape* changed from "flatline, zero variance" (adaptive schedule) to
 "oscillating plateau, real variance" (fixed schedule, stdev 0.58, swinging 6.5-9.3) —
 consistent with instability/noise at this fixed LR (1e-3, unchanged from the MLP's own
-tuned value) rather than a hard capacity ceiling. **Next, well-motivated test (not yet
-run): a gentler fixed LR** (e.g. 3e-4 or 1e-4) to see if reducing update noise lets it
-climb further past ~8 instead of oscillating in place.
+tuned value) rather than a hard capacity ceiling. **v10 (gentler fixed LR=3e-4, full 1500 iters): WRONG DIRECTION.** Last-100-iter mean
+**5.87** (stdev 0.74, still-rising trajectory through iter 1200 before settling) — worse
+than v9's lr=1e-3 result (8.08, stdev 0.58, saturated by iter ~700), though its
+velocity-tracking error was slightly better (1.05 vs 1.46 m/s — reward and vel-error
+aren't perfectly aligned here, other reward terms likely diverge). **Conclusion: the
+original lr=1e-3 (== the MLP's own tuned value) is the right magnitude; instability
+wasn't the limiting factor.** Best known config stays: `schedule="fixed"`, `lr=1e-3`.
+
+**Open question for a longer budget (in progress):** v9 saturates by iter ~700-800 at
+reward ~8 and stays flat — is 8 a hard structural ceiling for this architecture, or does
+it eventually break given substantially more training than the MLP needed? Testing the
+best config (lr=1e-3, fixed) extended to 3000 iterations (2x the MLP's own budget).
 
 ---
 
