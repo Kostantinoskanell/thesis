@@ -519,6 +519,55 @@ not-yet-saturated) but land in essentially the same ~7.6-8.0 final range at this
 — not a clear win, though the still-rising trajectory at iter 1400 leaves open whether
 more iterations than 1500 would separate it from the baseline's proven-flat ceiling.**
 
+---
+
+## D13. L4 first cut: R-STDP transferred from the nav layer does not recover locomotion under ice (OPEN)
+
+**Setup:** the v9 spiking locomotion policy (checkpoint model_1499.pt) deployed inside
+Isaac Lab's `Isaac-Velocity-Flat-Unitree-Go2-Play-v0` (clean, no obs-corruption noise,
+no random pushes). Terrain friction combine_mode="multiply" (terrain x robot's fixed
+0.8/0.6 foot friction) -- default terrain friction 1.0 gives effective ~0.8/0.6; icy
+shift found by the same headroom-screening method as M4c: friction=0.05/0.15 floored
+the policy (catastrophic near-instant fall, ~85% of episodes, no room to recover);
+friction=0.4 gives a genuine, bimodal ~25% fall rate with real headroom -- when it
+doesn't fall the episode looks like baseline, when it does it's within ~15-19 steps.
+
+**R-STDP setup:** `PopSpikingRSTDPController` (input+readout plastic layers per D9,
+TD-error third factor per D8, anchor=0.005, eta=0.05) -- the exact hyperparameters
+that worked for the nav-layer M4 pilot, transferred directly, no locomotion-specific
+tuning.
+
+**Result (n=20 baseline, n=20 frozen-shift, n=30 rstdp-shift, n=20 retention):**
+
+| phase | mean return | fall rate |
+|---|---|---|
+| baseline (normal friction) | 13.37 | 0/20 |
+| frozen, icy (friction=0.4) | 12.62 | 5/20 (25%) |
+| R-STDP under shift, 1st half | 1.22 | 7/15 (47%) |
+| R-STDP under shift, 2nd half | -2.06 | 8/15 (53%) |
+| retention (adapted weights, normal friction) | 10.32 | 0/20 |
+
+**R-STDP does not recover -- it makes things worse under the shift, and trends further
+down over the block rather than up.** But it does NOT catastrophically forget the base
+task (retention ≈77% of baseline mean return, 0% fall rate) -- the anchor mechanism is
+doing its stability job even though the adaptation itself isn't productive here.
+
+**This mirrors the nav layer's own history, not a dead end:** M4's first R-STDP attempt
+(readout-only) also stalled badly (7%) before input+readout+TD-error+anchor tuning
+(D8/D9) reached 30% -- a multi-iteration process. L4 is at that same "iteration 1" stage,
+not a proven failure. Most likely lever: **eta is probably too large for this
+architecture** -- the locomotion actor's plastic layers are much larger (fc[0] is
+480->128 = 61k weights vs the nav layer's smaller layers) and population coding is a
+more delicately-tuned structure (L3's own tuning journey showed it's sensitive to
+encoding scale, decoder bounds, surrogate shape under ordinary gradient descent) --
+Hebbian-correlation updates at the same eta may simply perturb it faster than gradient
+descent would. Untested next steps: smaller eta (e.g. 0.005, a 10x cut, mirroring how
+L3's own tuning journey required matching the reference's actor/critic LR ratio), fewer
+plastic layers (readout-only first, to isolate whether input-layer plasticity is
+specifically destabilizing here), or a stronger anchor.
+
+---
+
 **Consolidated read across the whole overnight+continuation investigation:** reward ≈8
 (vel-err ≈1.4 m/s) is a robust number that reappears across the default architecture (v9,
 2x-budget-verified flat), larger populations (v12), more timesteps (v14), and bigger
