@@ -17,7 +17,13 @@ patch = (
     "        _sp[\"actor\"][\"class_name\"] = \"nmc.locomotion.rsl_rl_spiking:SpikingActorMLPModel\"\n"
     "        _sp[\"actor\"].update({\"in_pop\": 10, \"out_pop\": 10, \"spiking_T\": 8, \"obs_normalization\": True,\n"
     "                              \"enc_sigma\": 0.3872983, \"actor_lr_scale\": 1.0, \"decoder_tanh\": False})\n"
+    "        import os as _os\n"
+    "        if _os.environ.get(\"SPIKING_FIXED_LR\") == \"1\":\n"
+    "            _sp[\"algorithm\"][\"schedule\"] = \"fixed\"\n"
+    "            _sp[\"algorithm\"][\"learning_rate\"] = float(_os.environ.get(\"SPIKING_LR\", \"1.0e-3\"))\n"
     "        import pprint; print(\"[SPIKING] actor cfg ->\"); pprint.pprint(_sp[\"actor\"])\n"
+    "        print(\"[SPIKING] algorithm schedule ->\", _sp[\"algorithm\"].get(\"schedule\"),\n"
+    "              \"lr ->\", _sp[\"algorithm\"].get(\"learning_rate\"))\n"
     "        runner = OnPolicyRunner(env, _sp, log_dir=log_dir, device=agent_cfg.device)"
 )
 assert orig in s, "anchor line not found"

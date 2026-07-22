@@ -425,14 +425,28 @@ likely explanation is that iteration-rate was never precisely measured across th
 session's many overlapping background checks (rough elapsed-time sampling, not a timed
 benchmark), so the 400-iter runs' true wall-clock cost may have been underestimated
 throughout. Killed the run rather than block on an unbounded wait.
-**Next diagnostic (still the highest-value open item, needs a clean/short session, not
-a marathon one):** re-run the best config (v4-equivalent, `decoder_tanh=False`) with
-an actual **timed** iteration-rate measurement from iteration 0 (e.g. `time.time()`
-deltas logged every N iters) before committing to a long run, so the iters-per-hour
-budget is known up front rather than assumed. If a realistic-length run still plateaus
-near reward 3, the bottleneck is structural (D12's (b): likely `out_pop`/`in_pop` size
-or a GAE/advantage-normalization interaction with a slow-changing spiking policy). If
-it climbs substantially given proper time, L3 just needs a longer budget than the MLP.
+**Follow-up (overnight, full 1500 iters, properly timed): DEFINITIVE — structural, not
+training-length.** rsl_rl's own `Iteration time` field (ground truth) showed steady-state
+~2.9-3.1s/iter (the earlier "~59s/iter" alarm was this session's own imprecise elapsed-
+time polling, not a real slowdown). Full trajectory: iter 400 reward 1.6, iter
+600-1400 oscillating 1.2-3.6 with **no upward trend**, final (iter 1499) 3.03,
+last-100-iter mean **2.48** (stdev 0.61). **The policy converges (stops improving) by
+~iteration 400 and then sits flat for 1100 more iterations.** This rules out "just
+needs more time" conclusively — 1100 extra iterations bought zero net progress.
+
+**Hypothesis CONFIRMED — real breakthrough.** The Go2 cfg's PPO uses an **adaptive
+KL-based LR schedule** (`schedule="adaptive"`, `desired_kl=0.01`); a population-coded,
+quantized firing-rate policy output plausibly makes KL-divergence estimates noisier/
+larger-looking than a smooth MLP's, so the schedule crushes the effective LR early and
+never recovers (adaptive KL schedules ratchet down fast, back up slowly) — exactly the
+observed "climbs, then flatlines forever" shape. **v8: same best config +
+`algorithm.schedule="fixed"`, `learning_rate=1e-3` (constant, no adaptive shrink), 800
+iters: reward climbed 4.8→8.7 and was STILL rising near the end — no flatline** (vs.
+every adaptive-schedule run capping at ~2-3 by iter 400 and never moving again). **Best
+result yet, ~3x the adaptive-schedule ceiling, with no sign of plateauing** — this is
+the real fix. Full 1500-iter run (matching the MLP's own training length) launched for
+a true apples-to-apples final number. `SPIKING_FIXED_LR=1` env var toggles this in
+`scripts/wsl_isaac_go2_spiking.sh` / `make_isaac_train_spiking.py`.
 
 ---
 
