@@ -561,7 +561,16 @@ architecture** -- the locomotion actor's plastic layers are much larger (fc[0] i
 more delicately-tuned structure (L3's own tuning journey showed it's sensitive to
 encoding scale, decoder bounds, surrogate shape under ordinary gradient descent) --
 Hebbian-correlation updates at the same eta may simply perturb it faster than gradient
-descent would. **Tested: smaller eta (0.005, a 10x cut) -- WRONG DIRECTION, rules out "eta too large."**
+descent would. **⚠ L4 is ILL-POSED on the current base policy (2026-07-22, see D12 correction +
+`archive/L4_gait_check/`):** the L3 spiking policy doesn't actually walk — it belly-flops
+into a stationary crouch. You cannot study "R-STDP recovers a gait under a terrain shift"
+when there is no gait to begin with, so the negative L4 results below (and the eta sweep)
+are **uninformative** — R-STDP was being asked to recover something that was never there.
+L4 needs a genuinely-walking spiking base policy first (a reward-shaping/exploration
+problem on the L3 side, per the D12 correction). Keeping the pipeline + results recorded
+since the pipeline itself is sound and reusable once a walking policy exists.
+
+**Tested: smaller eta (0.005, a 10x cut) -- WRONG DIRECTION, rules out "eta too large."**
 Fall rate got WORSE, not better: 19/30 (63%) vs eta=0.05's 15/30 (50%). Since both a 10x
 larger and the original eta show similar-or-worse degradation, the step-size magnitude
 is not the primary lever -- something more structural is at play. **Untested next
@@ -575,6 +584,24 @@ Hebbian drift at either eta tried), or gating (`gate_threshold`, suppress update
 the TD-error is small, currently disabled/0.0).
 
 ---
+
+**⚠ MAJOR CORRECTION (2026-07-22, `archive/L4_gait_check/`): reward ~8 is a NON-WALKING
+crouch local optimum, NOT a capacity ceiling.** We finally dumped a real rollout
+trajectory and looked at it (figure + MuJoCo replay GIF) instead of only tracking reward.
+The policy **collapses its base from 0.40 m to ~0.11 m in ~0.5 s and belly-flops** —
+legs splayed, body on the floor — then stays there, travelling 0.49 m in 20 s with mean
+|vx| ≈ 0.02 m/s and never tracking the velocity command. Reward ~8-13 comes from not
+triggering base-contact termination while collecting alive/orientation reward. So the
+whole D12 "hard architectural ceiling / capacity" framing below is **wrong**: this is an
+**optimization/exploration failure** (the spiking net gets stuck in a degenerate
+optimum), not a representational-capacity limit — the MLP walks under the identical reward
+(36, vel-err 0.16). The ~1.4 m/s velocity-tracking error that reappeared across *every*
+D12 variant was the tell we didn't heed: none of them ever walked. The architectural-lever
+sweep (populations/hidden/T all landing at ~8) is consistent — they all fall into the same
+crouch optimum. Next levers are reward-shaping / exploration (penalize low height, NoisySAN,
+curriculum), NOT bigger networks. Lesson (again, cf. the D3 obstacles-invisible render bug):
+**watch the robot, don't just trust the scalar** — a reward number hid a non-walking policy
+for the entire L3 investigation.
 
 **Consolidated read across the whole overnight+continuation investigation:** reward ≈8
 (vel-err ≈1.4 m/s) is a robust number that reappears across the default architecture (v9,

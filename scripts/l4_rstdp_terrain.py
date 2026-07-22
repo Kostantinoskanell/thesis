@@ -53,9 +53,15 @@ parser.add_argument("--ckpt", default="/home/hapos/IsaacLab/logs/rsl_rl/unitree_
 parser.add_argument("--load-weights", default=None, help="load a previously-adapted mlp state_dict instead of --ckpt's")
 parser.add_argument("--save-weights", default=None, help="save the (possibly adapted) mlp state_dict here")
 parser.add_argument("--seed", type=int, default=0)
+parser.add_argument("--video", action="store_true", help="record an rgb_array video of the rollout")
+parser.add_argument("--video-length", type=int, default=1000, help="video length in steps")
+parser.add_argument("--video-dir", default="/home/hapos/l4_videos", help="output dir for videos")
+parser.add_argument("--dump-traj", default=None, help="save first-episode base pose + joint trajectory to this .npz (headless, no RTX render needed)")
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
 args_cli.headless = True
+if args_cli.video:
+    args_cli.enable_cameras = True  # must be set BEFORE AppLauncher
 
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
@@ -100,7 +106,17 @@ def make_env(friction: float, device="cuda:0"):
     env_cfg.scene.terrain.physics_material.static_friction = friction
     env_cfg.scene.terrain.physics_material.dynamic_friction = friction
     import gymnasium as gym
-    env = gym.make(TASK, cfg=env_cfg)
+    env = gym.make(TASK, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
+    if args_cli.video:
+        import os
+        os.makedirs(args_cli.video_dir, exist_ok=True)
+        env = gym.wrappers.RecordVideo(
+            env, video_folder=args_cli.video_dir,
+            step_trigger=lambda step: step == 0,          # record from the very first step
+            video_length=args_cli.video_length,
+            name_prefix=f"l4_{args_cli.mode}_fric{friction}",
+            disable_logger=True)
+        print(f"[L4] recording video -> {args_cli.video_dir}", flush=True)
     return env
 
 
@@ -127,10 +143,13 @@ def main():
                                          stdp_cfg=cfg, anchor=args_cli.anchor, reward_mode="td", device=device)
         print(f"[L4] R-STDP: eta={args_cli.eta} anchor={args_cli.anchor} plastic_layers={plastic}", flush=True)
 
+    robot = env.unwrapped.scene["robot"]
+    joint_names = list(robot.data.joint_names)
+    traj = {"base_pos": [], "base_quat": [], "base_lin_vel": [], "joint_pos": [], "command": []}
+
     obs_dict, _ = env.reset()
     ep_reward, ep_len = 0.0, 0
     ep_rewards, ep_lens = [], []
-    prev_norm_obs_np = None
 
     while len(ep_rewards) < args_cli.episodes:
         raw = obs_dict["policy"]
@@ -142,13 +161,19 @@ def main():
         else:
             with torch.no_grad():
                 action = net(norm)
-            norm_np = None
 
         obs_dict, reward, terminated, truncated, info = env.step(action)
         done = bool(terminated[0] or truncated[0])
         r = float(reward[0])
         ep_reward += r
         ep_len += 1
+
+        if args_cli.dump_traj and len(ep_rewards) == 0:  # record the FIRST episode only
+            traj["base_pos"].append(robot.data.root_pos_w[0].cpu().numpy().copy())
+            traj["base_quat"].append(robot.data.root_quat_w[0].cpu().numpy().copy())
+            traj["base_lin_vel"].append(robot.data.root_lin_vel_b[0].cpu().numpy().copy())
+            traj["joint_pos"].append(robot.data.joint_pos[0].cpu().numpy().copy())
+            traj["command"].append(raw[0, 9:12].cpu().numpy().copy())  # velocity_commands slots
 
         if adapt:
             next_norm_np = normalize(obs_dict["policy"], mean, std).squeeze(0).detach().cpu().numpy()
@@ -160,6 +185,16 @@ def main():
             print(f"[{args_cli.mode}] episode {len(ep_rewards)}/{args_cli.episodes}: "
                   f"return={ep_reward:.2f} len={ep_len}", flush=True)
             ep_reward, ep_len = 0.0, 0
+            if args_cli.dump_traj and len(ep_rewards) == 1:
+                import numpy as _np
+                _np.savez(args_cli.dump_traj,
+                          base_pos=_np.array(traj["base_pos"]),
+                          base_quat=_np.array(traj["base_quat"]),
+                          base_lin_vel=_np.array(traj["base_lin_vel"]),
+                          joint_pos=_np.array(traj["joint_pos"]),
+                          command=_np.array(traj["command"]),
+                          joint_names=_np.array(joint_names))
+                print(f"[L4] dumped {len(traj['joint_pos'])}-step trajectory -> {args_cli.dump_traj}", flush=True)
 
     env.close()
 
