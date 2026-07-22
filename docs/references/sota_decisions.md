@@ -570,6 +570,22 @@ L4 needs a genuinely-walking spiking base policy first (a reward-shaping/explora
 problem on the L3 side, per the D12 correction). Keeping the pipeline + results recorded
 since the pipeline itself is sound and reusable once a walking policy exists.
 
+**✅ WALKING ACHIEVED (2026-07-22 autonomous session) via distillation, not reward-shaping.**
+The L3-crouch/L4-standstill saga resolved: (1) anti-crouch reward shaping (D14 above)
+fixed the belly-flop (base 0.11→0.24m) but the spiking policy then found a *stand-still*
+local optimum — 2 reward variants (incl. 4x velocity reward + entropy) both refused to
+walk under a forced forward command. Conclusion: the spiking policy won't DISCOVER walking
+via PPO exploration regardless of reward. (2) Fell back to the M3 recipe — distill the
+walking MLP teacher: verified MLP walks (forced vx=0.5 → 0.501, err 0.026), collected 128k
+(obs,act) pairs, BC-trained the PopSAN actor (val-MSE 0.025). **The distilled spiking
+policy WALKS: 5/5 episodes x 1000 steps, 0 falls, return 26-41 (matches the MLP), upright
+stepping gait confirmed by MuJoCo-replay video.** (3) PPO fine-tuning from the BC init
+*degraded* the gait (vel-err 0.036→0.29) and was abandoned — distillation alone wins.
+Limitation: falls under a sustained-constant command (~5s, covariate shift; the MLP walks
+at ~0.18m height too, so the distilled net's 0.19m is faithful, not a crouch). Full record
+in `archive/L4_gait_check/`. Lesson reinforced: verify walking by trajectory+video, never
+by reward alone.
+
 **Tested: smaller eta (0.005, a 10x cut) -- WRONG DIRECTION, rules out "eta too large."**
 Fall rate got WORSE, not better: 19/30 (63%) vs eta=0.05's 15/30 (50%). Since both a 10x
 larger and the original eta show similar-or-worse degradation, the step-size magnitude

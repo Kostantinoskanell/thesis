@@ -43,6 +43,38 @@ whether population-coding + this reward shaping can escape the crouch optimum at
 MLP walks under the identical reward, so the reward isn't the whole story — the spiking
 optimization is.
 
+## RESOLUTION (2026-07-22, autonomous session): distillation made it WALK
+Reward-shaping alone couldn't fix it — anti-crouch (base-height reward + <0.20 m
+termination) raised the base 0.11 m → 0.24 m and killed the belly-flop, but the policy
+then found a *second* stationary optimum (stand still; two variants, incl. 4× velocity
+reward + entropy boost, both refused to walk under a forced forward command). The spiking
+policy simply won't **discover** walking via PPO exploration — it converges to whatever
+stationary optimum survives.
+
+**What worked — distill the walking MLP teacher (the thesis's own M3 recipe):**
+1. Verified the MLP baseline genuinely walks (forced vx=0.5 → actual 0.501, err 0.026,
+   ~9.4 m). It walks at base height ~0.18 m (a low but real gait — so the distilled net's
+   ~0.19 m below is faithful reproduction, NOT a crouch).
+2. Collected 128k (obs, action) pairs from the MLP across 256 parallel envs
+   (`l4_collect_mlp_data.py`).
+3. BC-trained the PopSAN spiking actor to match (`l4_distill_spiking.py`, val-MSE 0.025,
+   surrogate-grad BPTT).
+4. **Result (`distilled_walk.gif`, `fig_distilled_gait.png`): the distilled spiking policy
+   WALKS** — 5/5 episodes full 1000 steps, ZERO falls, return 26–41 (matches/beats the MLP
+   baseline's 13–36 under the same reward), tracks the commanded velocity, upright
+   quadruped stance with a stepping gait (verified by eye in the MuJoCo replay — legs
+   underneath, body off the ground, stepping + translating across frames). This is, as far
+   as the literature search found, the first spiking Go2 locomotion policy that walks.
+
+**Honest limitation:** under an *artificially sustained constant* forward command (vx held
+at 0.3 or 0.5 for 20 s) it falls at ~5 s — a covariate-shift effect (the MLP teacher rarely
+experienced held-constant commands, which the env resamples periodically, so the distilled
+net didn't learn that out-of-distribution regime). Under normal (resampling) commands it's
+stable. Fix = DAgger (relabel student-visited states) or include sustained-command rollouts
+in the distillation set — future work. PPO fine-tuning from the BC init was tried and
+*degraded* the gait (velocity err 0.036 → 0.29), so it was abandoned — distillation alone
+is the better result here.
+
 ## Reproduce
 ```
 # dump a trajectory (headless, compute-only -- no RTX render needed):
