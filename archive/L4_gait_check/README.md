@@ -66,14 +66,19 @@ stationary optimum survives.
    underneath, body off the ground, stepping + translating across frames). This is, as far
    as the literature search found, the first spiking Go2 locomotion policy that walks.
 
-**Honest limitation:** under an *artificially sustained constant* forward command (vx held
-at 0.3 or 0.5 for 20 s) it falls at ~5 s — a covariate-shift effect (the MLP teacher rarely
-experienced held-constant commands, which the env resamples periodically, so the distilled
-net didn't learn that out-of-distribution regime). Under normal (resampling) commands it's
-stable. Fix = DAgger (relabel student-visited states) or include sustained-command rollouts
-in the distillation set — future work. PPO fine-tuning from the BC init was tried and
-*degraded* the gait (velocity err 0.036 → 0.29), so it was abandoned — distillation alone
-is the better result here.
+**Covariate-shift limitation — then FIXED with DAgger.** The BC-distilled net fell ~5 s
+into an *artificially sustained constant* command (vx held at 0.3/0.5 for 20 s) — the MLP
+teacher rarely saw held commands (the env resamples them), so the student never learned to
+recover in that out-of-distribution regime. **DAgger fix (`dagger_walk_forward.gif`,
+the M2 nav-layer recipe):** rolled the STUDENT under held forward commands (so it visits
+its own drift/pre-fall states), labeled each state with the TEACHER's action
+(`l4_dagger_collect.py`, 153.6k pairs), aggregated with the original 128k and retrained
+warm-started (`l4_distill_spiking.py --init-weights`, val-MSE 0.025). **Result: robust.**
+Under sustained vx=0.5 (which used to fall at step ~244): **3/3 episodes full 1000 steps,
+0 falls, body vx 0.495 vs commanded 0.5 (err 0.028 — matches the MLP teacher), walked
+~9.3 m forward.** So the spiking Go2 now walks robustly under both normal AND sustained
+commands. (PPO fine-tuning from the BC init was tried first and *degraded* the gait
+0.036→0.29, so abandoned — supervised distillation + DAgger is the winning path.)
 
 ## Reproduce
 ```

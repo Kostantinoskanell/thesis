@@ -586,6 +586,8 @@ at ~0.18m height too, so the distilled net's 0.19m is faithful, not a crouch). F
 in `archive/L4_gait_check/`. Lesson reinforced: verify walking by trajectory+video, never
 by reward alone.
 
+**DAgger made it robust to sustained commands (2026-07-22):** the BC net fell ~5s into a held-constant command (covariate shift). Rolled the student under held forward commands, labeled its drift-states with the teacher (153.6k pairs), aggregated + retrained warm-started. Now under sustained vx=0.5: 3/3 x 1000 steps, 0 falls, vx err 0.028 (matches MLP), ~9.3m forward (`dagger_walk_forward.gif`). The M2 nav-BC->DAgger recipe transferred cleanly to spiking locomotion.
+
 **Tested: smaller eta (0.005, a 10x cut) -- WRONG DIRECTION, rules out "eta too large."**
 Fall rate got WORSE, not better: 19/30 (63%) vs eta=0.05's 15/30 (50%). Since both a 10x
 larger and the original eta show similar-or-worse degradation, the step-size magnitude

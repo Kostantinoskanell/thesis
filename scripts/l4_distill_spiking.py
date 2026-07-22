@@ -29,8 +29,9 @@ from nmc.locomotion.popsan_actor import PopSpikingActorNet
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data", required=True)
+    ap.add_argument("--data", required=True, help="comma-separated npz files to aggregate (DAgger)")
     ap.add_argument("--out", required=True)
+    ap.add_argument("--init-weights", default=None, help="warm-start from this distilled .pt (DAgger refine)")
     ap.add_argument("--epochs", type=int, default=60)
     ap.add_argument("--batch", type=int, default=512)
     ap.add_argument("--lr", type=float, default=1e-3)
@@ -41,9 +42,15 @@ def main():
     ap.add_argument("--device", default="cpu")
     args = ap.parse_args()
 
-    d = np.load(args.data)
-    obs, act = d["obs"].astype(np.float32), d["act"].astype(np.float32)
-    mean, std = d["obs_mean"].astype(np.float32), d["obs_std"].astype(np.float32)
+    obs_parts, act_parts = [], []
+    for path in args.data.split(","):
+        dd = np.load(path)
+        obs_parts.append(dd["obs"].astype(np.float32))
+        act_parts.append(dd["act"].astype(np.float32))
+        print(f"  loaded {obs_parts[-1].shape[0]} pairs from {path}")
+    obs = np.concatenate(obs_parts, axis=0)
+    act = np.concatenate(act_parts, axis=0)
+    mean, std = obs.mean(0).astype(np.float32), obs.std(0).astype(np.float32)
     # MUST match the eval script's normalize(): (obs-mean)/(std+1e-2). Same formula
     # here and at deploy, or the distilled net sees a shifted input distribution.
     obs_n = (obs - mean) / (std + 1e-2)
@@ -61,6 +68,11 @@ def main():
     net = PopSpikingActorNet(obs_dim=obs.shape[1], act_dim=act.shape[1], hidden=hidden,
                              in_pop=args.in_pop, out_pop=args.out_pop, T=args.T,
                              decoder_tanh=False, actor_lr_scale=1.0).to(dev)
+    if args.init_weights:
+        blob = torch.load(args.init_weights, map_location=dev, weights_only=True)
+        blob.pop("_obs_mean", None); blob.pop("_obs_std", None)
+        net.load_state_dict(blob)
+        print(f"warm-started from {args.init_weights}")
     opt = torch.optim.Adam(net.parameters(), lr=args.lr)
 
     for ep in range(args.epochs):
