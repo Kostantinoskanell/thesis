@@ -98,6 +98,30 @@ offline val-MSE (0.038 vs 0.047) — plausibly a more robust operating point giv
 fragility above — but was NOT walk-verified in Isaac, so it's noted here as a promising
 untested lead, not a claimed result.)
 
+## UPDATE 2 (2026-07-23): re-measured after fixing the dragging rear leg
+User feedback watching the video: the rear-right leg looked like it was dragging, not
+stepping. Quantified with a new per-leg amplitude/jitter check
+(`scripts/l4_leg_amplitude.py`) and confirmed the teacher itself had the asymmetry (RR hip
+swing 0.123 vs 0.25–0.32 for the other three legs) — same root-cause pattern as the crouch.
+Fixed by adding Isaac Lab's `feet_slide` reward term (penalizes foot velocity while in
+contact) to the teacher; a first attempt at weight −1.0 completely froze the gait (all
+joint amplitudes collapsed to ~0.01, vx→0), corrected to the standard −0.1 used in Isaac
+Lab's own humanoid configs. Re-ran the full pipeline (see `archive/L4_gait_check/README.md`
+"DRAGGING REAR LEG FIX" for the full story) — every energy number holds again:
+
+| policy | height | firing | T | energy | vs MLP | walks? |
+|---|---|---|---|---|---|---|
+| dense v3 (teacher-fixed, DAgger) | 0.338 m | 64.5% | 8 | 344.8 nJ | 0.54× (costlier) | ✅ 3/3, path 20.5 m |
+| + firing penalty (v3) | 0.33 m | 36.9% | 8 | 252.1 nJ | 0.74× (costlier) | ✅ 3/3, path — |
+| **+ penalty, T=5 (v3)** | **0.338 m** | 48.3% | 5 | **181.0 nJ** | **1.03× cheaper** | ✅ **3/3, path 20.5 m** |
+
+Same story, same margin, now on a gait with a substantially reduced rear-leg drag (RR hip
+amplitude went from smallest-of-four to *largest*-of-four; RR calf moved from smallest+
+jitteriest to squarely mid-pack; RR's thigh joint alone retains a partial, honest residual
+asymmetry — not a perfect fix, but the whole-leg "dragging" look is resolved, confirmed both
+by these numbers and by rendering + inspecting a multi-frame stride sequence, not just a
+GIF thumbnail). Video: `sparse_t5_v3_walk.gif`. Best checkpoint: `data/l4_sparse_t5_v3.pt`.
+
 ## Reproduce
 ```
 # firing-rate-regularized distillation at chosen T (nmc env, CPU):

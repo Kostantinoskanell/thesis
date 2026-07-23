@@ -695,6 +695,22 @@ firing-penalty, more epochs) fixed it to 3/3 robust despite nearly-identical val
 reinforcing **offline loss does not predict closed-loop robustness**. Details:
 `archive/L5_energy/README.md` "UPDATE (2026-07-23)".
 
+**⚠ SECOND CORRECTION (2026-07-23, user feedback watching the video: the rear-right leg
+looked like it was dragging):** quantified with a new per-leg amplitude/jitter check
+(`scripts/l4_leg_amplitude.py`) — confirmed the MLP teacher itself had the asymmetry (RR
+hip swing 0.123 vs 0.25–0.32 for the other three legs), same root-cause pattern as the
+crouch. Fixed via Isaac Lab's built-in `feet_slide` reward term (penalizes foot velocity
+during ground contact). First attempt at weight −1.0 was a clean failure mode worth
+recording: the policy froze rigidly to avoid the penalty entirely (all joint amplitudes
+collapsed to ~0.01, vx→0) — corrected to −0.1 (the value Isaac Lab's own humanoid configs
+use). Re-ran the full pipeline; **every energy number holds**: T=5 still ~1.03× cheaper
+(181.0 nJ) at the now taller AND less-asymmetric gait (0.338 m, vx 0.523, 3/3×1000 steps
+0 falls, path 20.5 m — the best walking metrics of any checkpoint in this project). RR's
+whole-leg drag is resolved (hip went from smallest to largest amplitude of the four legs);
+its thigh joint alone retains a partial residual asymmetry. Details:
+`archive/L4_gait_check/README.md` "DRAGGING REAR LEG FIX", `archive/L5_energy/README.md`
+"UPDATE 2".
+
 ---
 
 _Update this log whenever a new SOTA option is identified. Every "we chose the simpler

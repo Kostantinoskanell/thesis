@@ -110,6 +110,44 @@ The old crouched checkpoints/GIFs above are kept as the historical record of how
 walking result was first achieved; they are superseded by the upright versions for any
 use beyond that history.
 
+## DRAGGING REAR LEG FIX (2026-07-23, user feedback watching the video: "the 4th leg on behind is almost just dragging")
+Quantified it first, not just eyeballed: `scripts/l4_leg_amplitude.py` measures each leg's
+per-joint range-of-motion + oscillation-sign-change count during steady walking. On the
+upright walker, **RR (rear-right) was a clear, real outlier** — hip swing amplitude 0.123
+(less than half of every other leg's 0.25–0.32), smallest thigh/calf amplitude too. Checked
+the root cause the same way as the crouch: **the MLP teacher itself already had this
+asymmetry** (confirmed on `data/upright_teacher_walktest.npz`), so the spiking student was
+just faithfully (and slightly more jitterily) copying it. Nothing in the reward penalized
+uneven leg usage — PPO found a "good enough" asymmetric trot.
+
+**Fix: added Isaac Lab's built-in `mdp.feet_slide` reward term** (penalizes a foot's linear
+velocity while in ground contact — the literal definition of "dragging") to the teacher's
+reward, alongside the existing base-height term. **First attempt at weight −1.0 was a
+disaster**: the policy learned to freeze rigidly (all 4 joint amplitudes collapsed to
+~0.001–0.02, vx→0, path 0.61 m in 20 s) — avoiding the slide penalty by never stepping at
+all, a clean illustration of over-strong reward shaping breaking a task entirely. Checked
+what weight real Isaac Lab humanoid configs (G1/H1/Digit) use for this same term: **−0.1**,
+10× gentler — retrained with that and it converged normally (reward ~30 vs the original
+~35, 1200 iters from scratch).
+
+**Verified by trajectory + per-leg amplitude + an actual multi-frame visual check (not a
+single GIF thumbnail — a MuJoCo frame sequence across a full stride cycle,
+`scripts/l4_frame_sequence.py`):** all four legs visibly lift and cycle, no leg stays flat
+on the ground while the others step. Quantitatively, RR's hip is now the *largest*
+amplitude of all four legs (0.24–0.36) and its calf motion falls squarely within the other
+three legs' range (previously the smallest and jitteriest of the four) — the whole-leg drag
+is resolved. RR's *thigh* joint specifically still shows somewhat smaller amplitude than
+the other three (a residual, joint-level asymmetry, not a whole-leg one) — an honest partial
+result, not a perfect fix.
+
+Re-ran the full pipeline (recollect 128k → BC-distill val-MSE 0.030 → DAgger 153.6k →
+retrain val-MSE 0.029) on the new teacher (`/home/hapos/IsaacLab/logs/rsl_rl/unitree_go2_flat/2026-07-24_00-41-58/model_1199.pt`).
+**Result (`dagger_walk_forward_v3.gif`): 3/3 episodes × 1000 steps, 0 falls, base height
+0.338 m (taller than before), vx 0.523 (err 0.041), path 20.47 m** — the best walking
+metrics of any checkpoint in this project, with the leg-drag substantially reduced. Best
+checkpoint: `data/l4_dagger_v3_spiking.pt`. Energy-positive sparse variant carries the fix
+through too — see `archive/L5_energy/README.md`.
+
 ## Reproduce
 ```
 # dump a trajectory (headless, compute-only -- no RTX render needed):
@@ -120,4 +158,12 @@ python scripts/l4_render_traj_mujoco.py data/l4_walk_traj.npz archive/L4_gait_ch
 # upright teacher (WSL isaac env):
 NUM_ENVS=2048 MAX_ITER=1200 TARGET_H=0.30 HEIGHT_W=-10.0 MIN_H=0.18 \
     bash scripts/wsl_isaac_upright.sh
+
+# + feet_slide anti-drag penalty (weight -0.1, NOT -1.0 -- see the disaster above):
+NUM_ENVS=2048 MAX_ITER=1200 TARGET_H=0.30 HEIGHT_W=-10.0 MIN_H=0.18 \
+    FEET_SLIDE=1 FEET_SLIDE_W=-0.1 bash scripts/wsl_isaac_upright.sh
+
+# per-leg amplitude/symmetry check + multi-frame visual check:
+python scripts/l4_leg_amplitude.py data/l4_dagger_v3_walktest.npz
+python scripts/l4_frame_sequence.py data/l4_dagger_v3_walktest.npz archive/L4_gait_check/seq 300,312,324,336
 ```
