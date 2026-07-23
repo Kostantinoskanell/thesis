@@ -677,6 +677,24 @@ conservative proxy; on neuromorphic hardware (Loihi, PopSAN's ~140× vs GPU) the
 is far larger — 1.04× is a digital-ASIC floor, not the neuromorphic ceiling. Full record +
 videos: `archive/L5_energy/`.
 
+**⚠ CORRECTION (2026-07-23, user feedback: "it walks too crouched i dont like it"):**
+the walker above was faithful to its teacher but the *teacher itself* only walked at
+0.184 m (Go2's natural standing height ≈0.30 m) — the flat-velocity reward never demanded
+a taller stance, and distillation can't exceed what it's shown. **Fixed at the source:**
+retrained the MLP teacher with a base-height reward (target 0.30 m; the MLP has no PPO
+discovery problem, so it simply learns taller — unlike the spiking net's D14 stand-still
+trap). New teacher verified by trajectory: 0.279–0.305 m, vx tracks 0.5 (err ≤0.07), 0
+falls. Re-ran collect→distill→DAgger→firing-penalty→T-sweep on top of it — **every energy
+number is unchanged**: T=5 is still the minimum T that preserves the gait, still **1.04×
+cheaper than the MLP (178.5 nJ)**, now at the correct standing height (0.302 m, vx 0.507,
+3/3×1000 steps no falls, verified both by trajectory and by eye in the rendered video). One
+new wrinkle: the first T=5-upright retrain was fragile (2/3 held-command episodes eventually
+fell despite walking cleanly for hundreds of steps first) even though its offline val-MSE
+(0.050) looked similar to the working T=4 crouched failure — a gentler retrain (lower
+firing-penalty, more epochs) fixed it to 3/3 robust despite nearly-identical val-MSE,
+reinforcing **offline loss does not predict closed-loop robustness**. Details:
+`archive/L5_energy/README.md` "UPDATE (2026-07-23)".
+
 ---
 
 _Update this log whenever a new SOTA option is identified. Every "we chose the simpler

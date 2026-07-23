@@ -66,6 +66,38 @@ Two structural reasons the spiking policy starts out *more expensive*:
   weight-memory movement (PopSAN reports ~140× energy vs GPU on Loihi). So 1.04× is a
   digital-ASIC floor, not the neuromorphic ceiling.
 
+## UPDATE (2026-07-23): re-measured on the UPRIGHT walker (crouch fixed, user feedback)
+The distilled walker above was faithful but visibly crouched (0.19 m base height) because
+its *teacher* only walked at 0.184 m — the flat-velocity reward never demanded a taller
+stance. Retrained the teacher itself with a base-height reward (target 0.30 m; see
+`archive/L4_gait_check/README.md`'s "UPRIGHT FIX"), verified it walks tall (0.279–0.305 m),
+and re-ran the full L4→L5 pipeline (recollect → distill → DAgger → firing-penalty → T-sweep)
+on top of it. Every number below is re-verified by trajectory (path length + height + vx),
+not reward, exactly as before.
+
+| policy | height | firing | T | energy | vs MLP | walks? |
+|---|---|---|---|---|---|---|
+| dense upright (DAgger) | 0.305 m | 63.7% | 8 | 321.8 nJ | 0.58× (costlier) | ✅ 3/3, path 19.2 m |
+| + firing penalty (upright) | 0.301 m | 33.9% | 8 | 220.5 nJ | 0.84× (costlier) | ✅ 3/3, path 18.6 m |
+| **+ penalty, T=5 v2 (upright)** | **0.302 m** | 49.2% | 5 | **178.5 nJ** | **1.04× cheaper** | ✅ **3/3, path 19.8 m** |
+
+**The energy story is unchanged after fixing the crouch: T=5 is still the minimum T that
+keeps the gait, and it is still ~1.04× cheaper than the MLP** — the same margin as the
+crouched version, now at the correct standing height. One real wrinkle surfaced along the
+way: the **first** T=5 upright retrain (λ=0.05, 40 epochs) was fragile — 2/3 held-command
+episodes eventually fell (at step 763 and 959 of 1000) despite walking cleanly up to that
+point, plausibly because a taller stance (higher center of mass) has less balance margin at
+a coarse T=5 rate code. A gentler retrain (λ=0.015, 60 epochs, `l4_sparse_t5_upright_v2.pt`)
+fixed it — **3/3 episodes × 1000 steps, 0 falls** — despite nearly identical offline val-MSE
+(0.047 vs 0.050), another instance of this thesis's repeated lesson that **offline loss does
+not predict closed-loop robustness; only rolling it out does.** Video:
+`sparse_t5_upright_walk.gif`. Best checkpoint: `data/l4_sparse_t5_upright_v2.pt`.
+
+(A T=6 variant, `data/l4_sparse_t6_upright.pt`, reaches a similar 1.05× cheaper at a better
+offline val-MSE (0.038 vs 0.047) — plausibly a more robust operating point given the T=5
+fragility above — but was NOT walk-verified in Isaac, so it's noted here as a promising
+untested lead, not a claimed result.)
+
 ## Reproduce
 ```
 # firing-rate-regularized distillation at chosen T (nmc env, CPU):

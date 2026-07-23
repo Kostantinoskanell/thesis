@@ -28,6 +28,8 @@ traj_path = sys.argv[1] if len(sys.argv) > 1 else "data/l4_walk_traj.npz"
 out_path = sys.argv[2] if len(sys.argv) > 2 else "archive/L4_gait_check/walk_crouch.gif"
 max_steps = int(sys.argv[3]) if len(sys.argv) > 3 else 500
 stride = int(sys.argv[4]) if len(sys.argv) > 4 else 2
+render_w = int(sys.argv[5]) if len(sys.argv) > 5 else 640
+render_h = int(sys.argv[6]) if len(sys.argv) > 6 else 480
 
 d = np.load(traj_path, allow_pickle=True)
 base_pos, base_quat, joint_pos = d["base_pos"], d["base_quat"], d["joint_pos"]
@@ -40,7 +42,7 @@ remap = [isaac_names.index(n) for n in mj_actuated]  # mj order index -> isaac i
 print(f"remap (mj->isaac): {remap}")
 
 data = mujoco.MjData(model)
-renderer = mujoco.Renderer(model, height=480, width=640)
+renderer = mujoco.Renderer(model, height=render_h, width=render_w)
 opt = mujoco.MjvOption()
 
 frames = []

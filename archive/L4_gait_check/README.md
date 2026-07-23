@@ -80,10 +80,44 @@ Under sustained vx=0.5 (which used to fall at step ~244): **3/3 episodes full 10
 commands. (PPO fine-tuning from the BC init was tried first and *degraded* the gait
 0.036→0.29, so abandoned — supervised distillation + DAgger is the winning path.)
 
+## UPRIGHT FIX (2026-07-23): the "faithful" 0.18-0.19 m gait was still too low — retrained the teacher taller
+The walking result above was real (verified by trajectory + video) but still visibly
+**crouched** — user feedback: "it walks too crouched i dont like it." Root cause: the MLP
+*teacher* itself only walked at **0.184 m** (normal Go2 standing ≈0.30 m) because the
+original flat-velocity reward has no height incentive strong enough to prevent settling low.
+The spiking student can only ever be as tall as its teacher, so distillation faithfully
+reproduced the crouch — it needed a taller teacher, not a distillation fix.
+
+**Fix: retrained the MLP teacher itself with the same anti-crouch reward-shaping idea as
+L3/D14** (`scripts/make_isaac_train_upright.py` + `scripts/wsl_isaac_upright.sh`,
+`UPRIGHT_ANTICROUCH=1`: `base_height_l2` reward, target 0.30 m, weight −10.0, + `<0.18 m`
+termination), but applied to the **standard MLP actor**, not the spiking one — the MLP
+has no PPO-discovery problem (D14's stand-still trap was spiking-specific), so it simply
+learns to walk taller under the added incentive. 1200 iters, reward converged to ~35
+(matching the original 36.25 baseline) with a near-zero height-error term.
+
+**Verified by trajectory (not reward): new teacher walks at 0.279–0.305 m** (essentially
+Go2's natural standing height), vx 0.46–0.51 vs commanded 0.5, path ~18–20 m per 20 s
+episode, 0 falls. Re-ran the full pipeline on top of it — recollect (128k pairs) → BC
+distill (val-MSE 0.025) → DAgger for sustained-command robustness (153.6k pairs,
+`dagger_walk_forward_upright.gif`): **3/3 episodes × 1000 steps, 0 falls, base height
+0.305 m, vx 0.492 (err 0.033), path 19.2 m.** Confirmed upright by eye in the MuJoCo replay,
+not just by the height number — legs mostly under the body, not splayed.
+
+Best upright checkpoints: `data/l4_dagger_upright_spiking.pt` (dense, faithful walker) and
+`data/l4_sparse_t5_upright_v2.pt` (sparse + T=5, energy-positive — see `archive/L5_energy/`).
+The old crouched checkpoints/GIFs above are kept as the historical record of how the
+walking result was first achieved; they are superseded by the upright versions for any
+use beyond that history.
+
 ## Reproduce
 ```
 # dump a trajectory (headless, compute-only -- no RTX render needed):
 bash scripts/wsl_isaac_l4.sh --mode baseline --episodes 1 --dump-traj data/l4_walk_traj.npz
 python scripts/l4_plot_gait.py data/l4_walk_traj.npz archive/L4_gait_check/fig_gait_diagnostic.png
 python scripts/l4_render_traj_mujoco.py data/l4_walk_traj.npz archive/L4_gait_check/walk_crouch.gif
+
+# upright teacher (WSL isaac env):
+NUM_ENVS=2048 MAX_ITER=1200 TARGET_H=0.30 HEIGHT_W=-10.0 MIN_H=0.18 \
+    bash scripts/wsl_isaac_upright.sh
 ```
