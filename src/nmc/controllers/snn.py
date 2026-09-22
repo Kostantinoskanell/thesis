@@ -112,19 +112,32 @@ class LIFNet(nn.Module):
         else:
             raise ValueError(f"unknown neuron type {neuron!r} (use 'lif' or 'alif')")
 
-    def forward(self, x_seq: torch.Tensor):
-        """x_seq: (T, B, in_dim). Returns (out_spike_sum (B, out_dim), spikes list)."""
+    def forward(self, x_seq: torch.Tensor, return_mem: bool = False):
+        """x_seq: (T, B, in_dim). Returns (out_spike_sum (B, out_dim), spikes list).
+        If return_mem=True, returns (out_sum, spikes, mems) where mems contains the
+        membrane potentials at each layer for each timestep.
+        """
         states = [cell.init_state() for cell in self.lif]
         out_sum = 0
         all_spikes = []
+        all_mems = [] if return_mem else None
         for t in range(x_seq.shape[0]):
             cur = x_seq[t]
             step_spikes = []
+            step_mems = [] if return_mem else None
             for i, (fc, cell) in enumerate(zip(self.fc, self.lif)):
                 cur, states[i] = cell.step(fc(cur), states[i])
                 step_spikes.append(cur)
+                if return_mem:
+                    # states[i] is (mem, a) for ALIF, or just mem for LIF
+                    mem = states[i][0] if isinstance(states[i], tuple) else states[i]
+                    step_mems.append(mem)
             out_sum = out_sum + cur
             all_spikes.append(step_spikes)
+            if return_mem:
+                all_mems.append(step_mems)
+        if return_mem:
+            return out_sum, all_spikes, all_mems
         return out_sum, all_spikes
 
     def decode(self, out_sum: torch.Tensor) -> int:
@@ -205,6 +218,7 @@ class SNNController:
     def act(self, x_seq: torch.Tensor, obs=None) -> int:
         self._cur_obs = None if obs is None else np.asarray(obs, dtype=np.float64)
         out_sum, all_spikes = self.net(x_seq)
+        self._last_spikes = all_spikes      # exposed for energy accounting (M6)
         # For each plastic layer i cache the full within-window pre/post spike
         # trains: pre = the encoded input (layer 0) or the previous layer's spikes,
         # post = layer i's spikes. Lets learn() replay the T timesteps with real
@@ -302,33 +316,67 @@ class SNNNavController:
                                    rpe_alpha=rpe_alpha, gate_threshold=gate_threshold,
                                    plastic_layers=plastic_layers, anchor=anchor)
                      if plasticity_enabled else None)
-        # Spike-activity accounting (energy proxy / H2 preview): total emitted
-        # spikes and total neuron-steps, accumulated across act() calls.
+        # Spike-activity accounting (energy proxy / H2, M6): totals plus the
+        # PER-LAYER and encoder-input rates SynOps needs (SynOps of layer l is
+        # driven by the rate of its *presynaptic* population, so a single global
+        # firing rate is not enough to cost the network out).
         self.total_spikes = 0.0
         self.total_neuron_steps = 0
         self.n_decisions = 0
+        n_layers = len(net.fc)
+        self.layer_spikes = [0.0] * n_layers
+        self.layer_slots = [0] * n_layers
+        self.enc_spikes = 0.0
+        self.enc_slots = 0
+        self.decision_rates: list[float] = []   # per-decision mean hidden rate
+
+    def _account(self, raster, all_spikes) -> None:
+        """Accumulate encoder + per-layer spike statistics for one decision."""
+        self.enc_spikes += float(raster.sum())
+        self.enc_slots += int(raster.size)
+        dec_spikes = 0.0
+        dec_slots = 0
+        for step in all_spikes:
+            for li, layer_spk in enumerate(step):
+                s = float(layer_spk.detach().sum())
+                n = layer_spk.numel()
+                self.layer_spikes[li] += s
+                self.layer_slots[li] += n
+                dec_spikes += s
+                dec_slots += n
+        self.total_spikes += dec_spikes
+        self.total_neuron_steps += dec_slots
+        self.decision_rates.append(dec_spikes / max(dec_slots, 1))
+        self.n_decisions += 1
 
     def act(self, obs) -> int:
         from nmc.encoding.spike_encoding import encode_nav_obs
         raster = encode_nav_obs(obs, self.n_steps, rng=self.rng)     # (T, F)
         x_seq = torch.as_tensor(raster, device=self.device).unsqueeze(1)  # (T, 1, F)
         if self.plasticity_enabled:
-            return self.core.act(x_seq, obs=obs)
+            a = self.core.act(x_seq, obs=obs)
+            self._account(raster, self.core._last_spikes)
+            return a
         with torch.no_grad():
             out_sum, all_spikes = self.net(x_seq)
-        for step in all_spikes:
-            for layer_spk in step:
-                self.total_spikes += float(layer_spk.sum())
-                self.total_neuron_steps += layer_spk.numel()
-        self.n_decisions += 1
+        self._account(raster, all_spikes)
         return self.net.decode(out_sum)
 
     def spike_stats(self) -> dict:
-        """Sparsity / energy proxy over all decisions so far (H2 preview)."""
+        """Sparsity / energy numbers over all decisions so far (H2 / M6).
+
+        `layer_rates[l]` is the firing rate of layer l's own neurons; `enc_rate`
+        is the encoder output (= layer 0's presynaptic) rate.
+        """
         if self.n_decisions == 0:
-            return {"spikes_per_decision": 0.0, "firing_rate": 0.0}
+            return {"spikes_per_decision": 0.0, "firing_rate": 0.0,
+                    "enc_rate": 0.0, "layer_rates": []}
         return {"spikes_per_decision": self.total_spikes / self.n_decisions,
-                "firing_rate": self.total_spikes / max(self.total_neuron_steps, 1)}
+                "firing_rate": self.total_spikes / max(self.total_neuron_steps, 1),
+                "enc_rate": self.enc_spikes / max(self.enc_slots, 1),
+                "layer_rates": [s / max(n, 1) for s, n in
+                                zip(self.layer_spikes, self.layer_slots)],
+                "decision_rates": list(self.decision_rates)}
 
     def observe(self, reward: float, next_obs, done: bool):
         """No-op when frozen; one R-STDP update when plasticity is enabled (M4)."""

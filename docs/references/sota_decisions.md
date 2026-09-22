@@ -711,6 +711,147 @@ its thigh joint alone retains a partial residual asymmetry. Details:
 `archive/L4_gait_check/README.md` "DRAGGING REAR LEG FIX", `archive/L5_energy/README.md`
 "UPDATE 2".
 
+## D16. M5 full comparison: M4's R-STDP recovery signal does not replicate at n=10 seeds (honest negative, sensor-dropout shift)
+
+**Question:** M4's pilot (single model-seed=7, one env-seed block of 30 episodes)
+reported R-STDP recovering to 30% success under sensor dropout, beating frozen
+SNN's 17% — flagged explicitly as unconfirmed ("CIs overlap at n=30... a
+positive *signal*, not a proven effect"). M5's job: run it properly across
+independent seeds and find out if the signal is real.
+
+**Method:** rebuilt `scripts/m5_full_comparison.py` (originally an autonomous-
+session draft with two real bugs — see `archive/M5_full_comparison/README.md`
+for the full account) to run all 6 controllers × 10 seeds × 30 episodes,
+Holm-corrected pairwise significance vs R-STDP. Two bugs fixed first: (1) the
+shift config left `sensor_dropout_start` unset (random dead-beam location
+every episode instead of M4's fixed, learnable corruption — silently defeats
+R-STDP's whole premise); (2) the TM-NORM baseline (D10) had an unbounded
+threshold-drift feedback loop (v_th going negative flips the ALIF reset's sign,
+causing runaway divergence) giving an implausible 0.0%±0.0% across all seeds.
+
+**Finding — R-STDP does not beat frozen SNN, checked six independent ways:**
+after fixing both bugs, R-STDP (8.7%±3.7%) numerically trails frozen SNN
+(11.0%±2.6%, p=0.14) at dropout=0.30. Investigated every plausible confound
+before accepting this: (a) a coarse eta/anchor sweep found an apparent winner
+(16.0%) that **regressed to noise (10.3%, p=0.63) when validated at full
+rigor** — a reminder that small-n screens produce false positives; (b) a
+severity screen found dropout=0.30 (M4's own single-seed pick) is **already
+floored** (75–85% collision, near-zero success from 0.25 up) — the real
+headroom zone is 0.15–0.20, mirroring M4c's own ice-severity lesson; (c) re-run
+at the corrected dropout=0.20 (real headroom, base 42.7%→~20%): **R-STDP
+(19.3%) still ties frozen SNN (21.3%), p=0.70**; (d) a plasticity-scope ×
+third-factor ablation (all-layers vs input+readout, TD-critic vs RPE) at the
+corrected severity: **every variant (19.3–21.7%) ties frozen SNN**. Diagnostics
+(per-seed + termination-reason breakdown): no seed outliers (R-STDP's 10 seeds
+sit in a tight band each time); falls are rare everywhere (1–6%, the
+locomotion policy never breaks down mid-episode); the dominant failure is
+**collision**, elevated for the whole SNN family (79–94%) vs the MLPs (~60%)
+regardless of plasticity setting.
+
+**Conclusion:** this is a genuine, thoroughly-triangulated negative result, not
+a bug or a mistuned hyperparameter. M4's 30% was very likely a single-seed
+outlier — precisely the risk M4's own writeup flagged. **The part of H1 that
+holds up in every single test: R-STDP reliably, significantly beats pure
+Hebbian STDP** (e.g. 19.3% vs 8.7% at dropout=0.20) — reward modulation is
+doing real work, just not enough to beat a frozen network on this particular
+(sensor-level) shift. Contrast with M4c (terrain/sand, a dynamics-level shift):
+R-STDP closes the *full* gap to the MLP there. **H1 is shift-dependent, not
+universally true or false** — a nuanced, defensible thesis finding, consistent
+with the L-track's own nav-vs-locomotion contrast (D13/D15): reward-modulated
+plasticity helps where the fix is a coarse re-calibration the controller's
+own interface can express (velocity commands under a terrain fault, or here,
+apparently not a sensor-level remap through this specific SNN's population-
+coded action interface). Full record, all six checks' data, and reproduce
+commands: `archive/M5_full_comparison/README.md`.
+
+## D17. M6 energy + M4b extensions: H2 confirmed on navigation; the robustness belongs to ALIF, not R-STDP; and online plasticity is the thing the FPGA must fix
+
+**Question:** (a) does the nav-layer SNN actually save energy (H2), and does it degrade
+gracefully under noise (H4)? (b) M5 left two escape hatches — maybe R-STDP helps at some
+untested *severity*, or maybe the result is specific to the one dead-beam *mask* M4/M5
+always used. (c) The M4b plan's item 7 was a pre-registered ablation with a stated
+decision rule that had never been run.
+
+**Method:** ported L5's SynOps/Horowitz-45nm model to the nav layer with firing rates
+measured on real closed-loop rollouts, and extended it three ways the literature model
+omits (`src/nmc/eval/energy.py`): neuron-state updates, the spike encoder, and **the cost
+of the online learning rule itself** — the last reported both as the dense reference
+implementation runs and as an **event-driven lower bound**. Plus four M4b screens
+(`scripts/m4b_extras.py`). Full records: `archive/M6_energy/`, `archive/M4b_extras/`.
+
+**Finding 1 — H2 holds on navigation, and it is a real contrast with locomotion.**
+Frozen SNN is **10.4× cheaper** than the frozen MLP on the literature-standard SynOps
+view (125.5 vs 1304.8 nJ/decision) and **2.4×** on full accounting (549.7 vs 1321.7 nJ).
+L5 got only 1.04× for locomotion after sparsity regularization and minimal T. Same
+method, same 45 nm constants, order-of-magnitude different answer — the cleanest
+quantitative statement yet of the layer-specific thesis message (cf. D13/D15).
+
+**Finding 2 — at 1.5% firing the neurons cost 3.4× the synapses** (420 vs 126 nJ of the
+549.7 nJ total). The per-tick membrane/adaptive-threshold arithmetic is paid by every
+neuron whether or not it spikes, so beyond a certain sparsity the SynOps metric stops
+describing where the energy goes. Actionable: the remaining lever is T (or event-driven
+neuron updates), not further sparsification — which is also what L5 concluded about T
+from the opposite direction.
+
+**Finding 3 (the honest one) — per-decision efficiency does not survive conversion to
+per-task efficiency.** Energy per *successful navigation*: frozen SNN 2276 µJ vs frozen
+MLP 2280 µJ — a dead heat, the 2.4× per-decision advantage being exactly cancelled by
+the SNN's lower success rate and longer paths. Efficiency quoted per inference is not a
+deployment claim. This metric should be reported alongside per-decision energy anywhere
+the thesis makes an efficiency argument.
+
+**Finding 4 — online plasticity is expensive, and that is precisely the FPGA's job.**
+R-STDP's dense eligibility update costs **15 538 nJ/decision** — 28× its own inference,
+and 12× the MLP's entire forward pass. The **event-driven/crossbar formulation is 20.8×
+cheaper (747 nJ)**, which brings an *online-learning* controller to parity with a frozen
+MLP forward pass, and is **10.2× cheaper than backprop learning** (online-MLP: 7587 nJ).
+M7/M8 now has a quantified target instead of a hand-wave, and H3 gains a second, sharper
+framing: the crossbar's win is on the *update*, not the forward pass.
+
+**Finding 5 — the pre-registered neuron ablation reassigns the credit.** The M4b-7
+decision rule was explicit: a large frozen-LIF/frozen-ALIF gap "would mean ALIF itself is
+doing some of the work." Result (10 seeds × 10 eps, dropout 0.20): **frozen LIF 7.0%,
+frozen ALIF 17.0% (+10 pts, p=0.051), R-STDP-ALIF 12.0% (−5 pts vs frozen ALIF,
+p=0.302).** So the shift-robustness M4 read as R-STDP recovery is **a property of the
+ALIF neuron model** — adopted back in D2 as an unrelated SOTA upgrade and never
+separately credited — while the plasticity adds nothing on top. This also **disagrees
+with Zhao et al. 2025 Table VII**, which reports adaptive-threshold neurons alone *not*
+rescuing OOD performance and which is what motivated running the ablation; the
+disagreement should be stated in the write-up, not smoothed over.
+
+**Finding 6 — M5's two escape hatches are closed, with one softening.** No severity in
+0.10–0.30 shows a significant R-STDP advantage over frozen SNN (deltas +6/−6/−8/−0 pts,
+all p>0.38). No dead-beam mask reaches significance either; but **pooled over four masks
+R-STDP is 24.0% vs frozen 22.0%**, and M4/M5's start=8 mask turns out to be one of the
+less favourable ones — so the honest estimate of the true effect is **~0, not negative**.
+R-STDP also shows larger across-mask variance (15.9% vs 9.2%): plasticity adds spread.
+
+**Finding 7 — H4 is REFUTED: the MLP degrades more gracefully than the SNN.** Within
+σ ≤ 0.2 nothing separates (that range is simply too mild). Extending to σ=0.8 makes the
+ordering clear and it is the *opposite* of the hypothesis: the frozen **MLP is essentially
+noise-immune** (42% → 38%, slope −0.6 pts/0.1σ) while the frozen **SNN loses more than
+half** (≈45% → 18%, −1.8); online-MLP collapses only at the extreme (N50 = 0.685) and
+TM-NORM dies outright (0%). Mechanism, and it is coherent rather than a fluke: the SNN
+does not read the LiDAR, it **Poisson-samples** it over T=20 ticks, so additive input
+noise *compounds with* encoding noise instead of being averaged away — the MLP consumes
+the analog value directly and never pays that. The standard neuromorphic
+"temporal filtering averages noise out" claim does not hold at T=20. Levers if the thesis
+wants to recover H4: raise T (energy cost, per Finding 2) or drop stochastic rate coding
+for a latency/learned encoder — which **D4 already flags as the SOTA alternative to
+revisit**, and this is the concrete evidence that it should be.
+
+**How to apply:** the honest nav-layer scorecard the write-up should present is
+**mixed and specific, not a blanket verdict**: energy — WIN (10.4x, and a real contrast
+with locomotion's 1.04x); shift-robustness from ALIF neuron dynamics — WIN (+10 pts,
+Finding 5); noise robustness — LOSS (Finding 7); online-plasticity recovery — NULL
+(M5/D16 and Finding 6). Lead the energy argument with the nav-vs-loco contrast, always
+pair per-decision energy with energy-per-success (Finding 3), and use the
+dense-vs-event-driven plasticity gap (Finding 4) as the quantified motivation for the
+FPGA chapter. Credit ALIF, not R-STDP, for shift-robustness. Two concrete follow-ups this
+opens: **D4 (drop stochastic rate coding for a latency/learned encoder)** now has direct
+evidence behind it, and **D1 (e-prop)** remains the scoped upgrade path for the plasticity
+null. See D16 above for the companion M5 entry.
+
 ---
 
 _Update this log whenever a new SOTA option is identified. Every "we chose the simpler
