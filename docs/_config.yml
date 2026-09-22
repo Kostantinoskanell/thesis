@@ -1,0 +1,3 @@
+theme: jekyll-theme-cayman
+title: Memristor-Inspired Neuromorphic Control for Robotics
+description: SNN + reward-modulated STDP vs DNN/RL baselines, on a real Unitree Go2, full-dynamics simulation

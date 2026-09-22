@@ -1,3 +1,8 @@
+---
+layout: default
+title: Home
+---
+
 # Memristor-Inspired Neuromorphic Control for Robotics
 
 Undergraduate thesis work (ECE, University of Patras). A hardware–software
@@ -7,10 +12,10 @@ simulated with full rigid-body dynamics (MuJoCo / Isaac Lab), under a
 mid-episode distribution shift — plus an FPGA co-processor structurally
 analogous to a memristive crossbar for the synaptic weight update.
 
-Full proposal: [`proposal/proposal.tex`](proposal/proposal.tex). Full milestone
+Full proposal: [`proposal/proposal.tex`](https://github.com/Kostantinoskanell/thesis/blob/main/proposal/proposal.tex). Full milestone
 plan, locked decisions, and every result in detail:
-[`ROADMAP.md`](ROADMAP.md). Every SOTA-vs-conventional design choice and why:
-[`docs/references/sota_decisions.md`](docs/references/sota_decisions.md).
+[`ROADMAP.md`](https://github.com/Kostantinoskanell/thesis/blob/main/ROADMAP.md). Every SOTA-vs-conventional design choice and why:
+[`references/sota_decisions.md`](https://github.com/Kostantinoskanell/thesis/blob/main/docs/references/sota_decisions.md).
 
 ## At a glance
 
@@ -39,12 +44,12 @@ walk under full physics — no pretrained policy for this robot existed, so it
 was trained from scratch (PPO, MuJoCo Playground), then exported to a
 pure-NumPy runtime with bit-exact train↔deploy parity.
 
-<img src="archive/D3a_policy_export_windows/walk_windows.gif" width="420" alt="Go2 walking under the trained RL policy">
+<img src="https://raw.githubusercontent.com/Kostantinoskanell/thesis/main/archive/D3a_policy_export_windows/walk_windows.gif" width="420" alt="Go2 walking under the trained RL policy">
 
 *Trained locomotion policy tracking a velocity command — the walking
 "actuator" every controller below drives.*
 
-Details: [`archive/D2_go2_rl_go2model/`](archive/D2_go2_rl_go2model), [`archive/D3a_policy_export_windows/`](archive/D3a_policy_export_windows), [`archive/D3_go2_nav_env/`](archive/D3_go2_nav_env).
+Details: [`archive/D2_go2_rl_go2model/`](https://github.com/Kostantinoskanell/thesis/tree/main/archive/D2_go2_rl_go2model), [`archive/D3a_policy_export_windows/`](https://github.com/Kostantinoskanell/thesis/tree/main/archive/D3a_policy_export_windows), [`archive/D3_go2_nav_env/`](https://github.com/Kostantinoskanell/thesis/tree/main/archive/D3_go2_nav_env).
 
 ---
 
@@ -56,7 +61,7 @@ question: when a distribution shift hits (dead LiDAR beams, changed terrain),
 does releasing the SNN to online R-STDP help it recover faster than a frozen
 network?
 
-<img src="archive/D3_go2_nav_env/nav_episode.gif" width="420" alt="Go2 navigating around obstacles with a mid-episode shift">
+<img src="https://raw.githubusercontent.com/Kostantinoskanell/thesis/main/archive/D3_go2_nav_env/nav_episode.gif" width="420" alt="Go2 navigating around obstacles with a mid-episode shift">
 
 *The navigation task: reach the goal, avoid obstacles, survive a mid-episode
 distribution shift.*
@@ -81,11 +86,11 @@ distribution shift.*
 - On **terrain** shifts specifically, R-STDP *does* close the full gap to the
   MLP — so the effect is shift-dependent, not universally absent.
 
-Full write-ups: [`archive/M5_full_comparison/`](archive/M5_full_comparison) (the
-core statistical result), [`archive/M4b_extras/`](archive/M4b_extras) (the
-neuron-model ablation), [`archive/M6_energy/`](archive/M6_energy) (energy +
-noise), [`archive/M4b_terrain_walk_compare/`](archive/M4b_terrain_walk_compare)
-(the terrain result). Decision log: [D16–D17](docs/references/sota_decisions.md).
+Full write-ups: [`archive/M5_full_comparison/`](https://github.com/Kostantinoskanell/thesis/tree/main/archive/M5_full_comparison) (the
+core statistical result), [`archive/M4b_extras/`](https://github.com/Kostantinoskanell/thesis/tree/main/archive/M4b_extras) (the
+neuron-model ablation), [`archive/M6_energy/`](https://github.com/Kostantinoskanell/thesis/tree/main/archive/M6_energy) (energy +
+noise), [`archive/M4b_terrain_walk_compare/`](https://github.com/Kostantinoskanell/thesis/tree/main/archive/M4b_terrain_walk_compare)
+(the terrain result). Decision log: [D16–D17](https://github.com/Kostantinoskanell/thesis/blob/main/docs/references/sota_decisions.md).
 
 ---
 
@@ -96,7 +101,7 @@ that's really a *body/physics* problem (e.g. slipping on ice) — it's below
 the navigator's interface. This track pushes the spiking network and R-STDP
 **into the gait itself**.
 
-<img src="archive/L4_gait_check/dagger_walk_forward_v3.gif" width="420" alt="Spiking neural network walking the Go2">
+<img src="https://raw.githubusercontent.com/Kostantinoskanell/thesis/main/archive/L4_gait_check/dagger_walk_forward_v3.gif" width="420" alt="Spiking neural network walking the Go2">
 
 *A spiking neural network is the walking controller here — not just the
 navigator. First working spiking-Go2 locomotion policy found in the
@@ -118,7 +123,7 @@ literature search.*
   R-STDP under an icy-terrain shift made the gait progressively collapse
   rather than recover — the opposite of the (partial) nav-layer effect.
 
-Full write-ups: [`archive/L4_gait_check/`](archive/L4_gait_check), [`archive/L5_energy/`](archive/L5_energy).
+Full write-ups: [`archive/L4_gait_check/`](https://github.com/Kostantinoskanell/thesis/tree/main/archive/L4_gait_check), [`archive/L5_energy/`](https://github.com/Kostantinoskanell/thesis/tree/main/archive/L5_energy).
 
 ---
 
@@ -139,33 +144,18 @@ archive/<milestone>/      figures, GIFs, and full write-ups per milestone
 ```
 
 **Heavily documented on purpose**: every non-trivial bug is in
-[`docs/debug-log/`](docs/debug-log/), every design decision (and every SOTA
+[`docs/debug-log/`](https://github.com/Kostantinoskanell/thesis/tree/main/docs/debug-log/), every design decision (and every SOTA
 option considered and rejected) is in
-[`docs/references/sota_decisions.md`](docs/references/sota_decisions.md), and
+[`docs/references/sota_decisions.md`](https://github.com/Kostantinoskanell/thesis/blob/main/docs/references/sota_decisions.md), and
 every milestone has a full write-up in `archive/`.
-
-## Setup
-
-Two environments, because the two tracks have different dependencies:
-
-```powershell
-# nav-layer / M-track (Windows, CPU): conda env `nmc`, Python 3.11
-conda create -n nmc python=3.11 -y
-conda install -n nmc -c conda-forge pybullet numpy matplotlib -y
-conda run -n nmc python -m pip install snntorch stable-baselines3 gymnasium mujoco
-# install the CUDA torch build matching your GPU from pytorch.org
-```
-
-Locomotion-track (L) training runs in WSL2 + Isaac Lab (GPU) — see
-[`docs/debug-log/2026-07-21_isaac-lab-wsl-8gb-bringup.md`](docs/debug-log/2026-07-21_isaac-lab-wsl-8gb-bringup.md)
-for the full bring-up.
-
-```bash
-$env:PYTHONPATH="src"; pytest -q     # unit tests: numpy-only, no GPU/board needed
-```
 
 ## Status
 
 M0–M6 (navigation) and L0–L5 (locomotion) are done — see the table above and
-[`ROADMAP.md`](ROADMAP.md) for full detail. **Next: M7/M8, the FPGA
+[`ROADMAP.md`](https://github.com/Kostantinoskanell/thesis/blob/main/ROADMAP.md) for full detail. **Next: M7/M8, the FPGA
 co-processor.**
+
+---
+
+*This page is the GitHub Pages front page for the project repository:*
+[*github.com/Kostantinoskanell/thesis*](https://github.com/Kostantinoskanell/thesis)
