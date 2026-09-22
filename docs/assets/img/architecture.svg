@@ -1,0 +1,87 @@
+<svg viewBox="0 0 1180 520" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1950A0"/>
+    </marker>
+    <marker id="arrowGray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/>
+    </marker>
+    <marker id="arrowRed" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#c0392b"/>
+    </marker>
+  </defs>
+
+  <rect width="1180" height="520" fill="#ffffff"/>
+
+  <!-- title -->
+  <text x="590" y="30" text-anchor="middle" font-size="17" font-weight="700" fill="#1f2937">Two-layer control architecture, closed loop under a distribution shift</text>
+
+  <!-- Sensors -->
+  <rect x="30" y="180" width="140" height="80" rx="10" fill="#eef3fb" stroke="#1950A0" stroke-width="1.5"/>
+  <text x="100" y="212" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1950A0">Sensors</text>
+  <text x="100" y="230" text-anchor="middle" font-size="11" fill="#374151">LiDAR (32 beams)</text>
+  <text x="100" y="244" text-anchor="middle" font-size="11" fill="#374151">velocity, heading</text>
+
+  <!-- Encoder -->
+  <rect x="215" y="180" width="150" height="80" rx="10" fill="#eef3fb" stroke="#1950A0" stroke-width="1.5"/>
+  <text x="290" y="205" text-anchor="middle" font-size="13" font-weight="700" fill="#1950A0">Spike Encoder</text>
+  <text x="290" y="223" text-anchor="middle" font-size="11" fill="#374151">rate coding (distance)</text>
+  <text x="290" y="238" text-anchor="middle" font-size="11" fill="#374151">TTFS (urgency)</text>
+  <text x="290" y="253" text-anchor="middle" font-size="10" fill="#6b7280" font-style="italic">(MLP path skips this)</text>
+
+  <!-- Navigator -->
+  <rect x="405" y="150" width="200" height="140" rx="10" fill="#ffffff" stroke="#1950A0" stroke-width="2"/>
+  <text x="505" y="176" text-anchor="middle" font-size="14" font-weight="700" fill="#1950A0">Navigator</text>
+  <text x="505" y="194" text-anchor="middle" font-size="11" fill="#374151">MLP  or  LIF/ALIF-SNN</text>
+  <text x="505" y="209" text-anchor="middle" font-size="11" fill="#374151">population-vote decode</text>
+  <text x="505" y="228" text-anchor="middle" font-size="11" fill="#374151">action: fwd / left / right / brake</text>
+  <rect x="425" y="245" width="160" height="30" rx="6" fill="#fdf2f0" stroke="#c0392b" stroke-width="1.2"/>
+  <text x="505" y="264" text-anchor="middle" font-size="11" font-weight="700" fill="#c0392b">M-track: R-STDP here</text>
+
+  <!-- Velocity command -->
+  <rect x="645" y="195" width="140" height="50" rx="8" fill="#f3f4f6" stroke="#94a3b8" stroke-width="1.2"/>
+  <text x="715" y="215" text-anchor="middle" font-size="11" font-weight="700" fill="#374151">velocity cmd</text>
+  <text x="715" y="231" text-anchor="middle" font-size="11" fill="#374151">[vx, vy, &#969;]</text>
+
+  <!-- Locomotion -->
+  <rect x="825" y="150" width="200" height="140" rx="10" fill="#ffffff" stroke="#1950A0" stroke-width="2"/>
+  <text x="925" y="176" text-anchor="middle" font-size="14" font-weight="700" fill="#1950A0">Locomotion policy</text>
+  <text x="925" y="194" text-anchor="middle" font-size="11" fill="#374151">PPO-trained MLP</text>
+  <text x="925" y="209" text-anchor="middle" font-size="11" fill="#374151">or PopSAN spiking actor</text>
+  <text x="925" y="228" text-anchor="middle" font-size="11" fill="#374151">walks the Go2 to track cmd</text>
+  <rect x="845" y="245" width="160" height="30" rx="6" fill="#fdf2f0" stroke="#c0392b" stroke-width="1.2"/>
+  <text x="925" y="264" text-anchor="middle" font-size="11" font-weight="700" fill="#c0392b">L-track: R-STDP here</text>
+
+  <!-- Go2 physics -->
+  <rect x="965" y="370" width="180" height="70" rx="10" fill="#eef3fb" stroke="#1950A0" stroke-width="1.5"/>
+  <text x="1055" y="398" text-anchor="middle" font-size="13" font-weight="700" fill="#1950A0">Go2, MuJoCo</text>
+  <text x="1055" y="416" text-anchor="middle" font-size="11" fill="#374151">full rigid-body dynamics</text>
+
+  <!-- Environment / shift -->
+  <rect x="30" y="370" width="220" height="70" rx="10" fill="#fff8eb" stroke="#c8822a" stroke-width="1.5"/>
+  <text x="140" y="393" text-anchor="middle" font-size="12.5" font-weight="700" fill="#8a5a1e">Environment + mid-episode shift</text>
+  <text x="140" y="411" text-anchor="middle" font-size="11" fill="#7a5a2e">dead LiDAR beams / ice / sand</text>
+  <text x="140" y="426" text-anchor="middle" font-size="11" fill="#7a5a2e">= what recovery is measured against</text>
+
+  <!-- FPGA -->
+  <rect x="430" y="400" width="290" height="90" rx="10" fill="#f5f7fb" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6,4"/>
+  <text x="575" y="425" text-anchor="middle" font-size="13" font-weight="700" fill="#4b5563">FPGA co-processor (planned, M7/M8)</text>
+  <text x="575" y="443" text-anchor="middle" font-size="11" fill="#6b7280">parallel R-STDP weight update,</text>
+  <text x="575" y="458" text-anchor="middle" font-size="11" fill="#6b7280">structurally analogous to a memristor crossbar</text>
+  <text x="575" y="476" text-anchor="middle" font-size="10.5" fill="#9ca3af" font-style="italic">target: 20.8&#215; cheaper than the dense update (M6)</text>
+
+  <!-- main flow arrows -->
+  <path d="M170,220 L213,220" stroke="#1950A0" stroke-width="2" marker-end="url(#arrow)" fill="none"/>
+  <path d="M365,220 L403,220" stroke="#1950A0" stroke-width="2" marker-end="url(#arrow)" fill="none"/>
+  <path d="M605,220 L643,220" stroke="#1950A0" stroke-width="2" marker-end="url(#arrow)" fill="none"/>
+  <path d="M785,220 L823,220" stroke="#1950A0" stroke-width="2" marker-end="url(#arrow)" fill="none"/>
+  <path d="M980,290 C1010,320 1040,340 1055,368" stroke="#1950A0" stroke-width="2" marker-end="url(#arrow)" fill="none"/>
+
+  <!-- feedback loop: Go2 -> environment -> sensors -->
+  <path d="M965,405 L250,405" stroke="#c8822a" stroke-width="2" marker-end="url(#arrowGray)" fill="none"/>
+  <path d="M100,370 L100,262" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrowGray)" fill="none"/>
+
+  <!-- FPGA dashed links to both plasticity points -->
+  <path d="M480,400 C470,360 480,320 495,277" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4,4" marker-end="url(#arrowGray)" fill="none"/>
+  <path d="M670,400 C740,350 820,300 895,277" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4,4" marker-end="url(#arrowGray)" fill="none"/>
+</svg>
