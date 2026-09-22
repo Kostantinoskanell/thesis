@@ -57,7 +57,12 @@ def shift_cfg(dropout, start=8):
 
 
 def rollout(env, ctrl, seed, num_episodes, log_positions=False):
-    succ, paths = [], []
+    """log_positions also captures each episode's own obstacle snapshot at the
+    moment IT ends -- dynamic obstacles move, so a single shared snapshot taken
+    after a later episode is stale/wrong for an earlier one (confirmed bug in
+    the first cut of part_traj: the plotted collision obstacle didn't match
+    what the robot actually hit)."""
+    succ, paths, end_obst = [], [], []
     for ep in range(num_episodes):
         obs, _ = env.reset(seed=seed * 100 + ep)
         pos = [env._robot_pose()[0].copy()] if log_positions else None
@@ -73,13 +78,14 @@ def rollout(env, ctrl, seed, num_episodes, log_positions=False):
         succ.append(int(info["reached"]))
         if log_positions:
             paths.append(np.array(pos))
-    return np.array(succ), paths
+            end_obst.append(env.privileged_state()[3])
+    return np.array(succ), paths, end_obst
 
 
 # ---------------------------------------------------------------- severity
 def _sev_task(name, seed, dropout, n_eps):
     env = Go2NavEnv(shift_cfg(dropout))
-    succ, _ = rollout(env, build(name, seed), seed, n_eps)
+    succ, _, _ = rollout(env, build(name, seed), seed, n_eps)
     env.close()
     return name, dropout, seed, float(succ.mean())
 
@@ -140,7 +146,7 @@ def part_severity(args):
 # ------------------------------------------------------------------- masks
 def _mask_task(name, seed, start, n_eps):
     env = Go2NavEnv(shift_cfg(0.20, start=start))
-    succ, _ = rollout(env, build(name, seed), seed, n_eps)
+    succ, _, _ = rollout(env, build(name, seed), seed, n_eps)
     env.close()
     return name, start, seed, float(succ.mean())
 
@@ -206,7 +212,7 @@ NEURON_VARIANTS = {
 def _neuron_task(variant, seed, n_eps):
     path, plastic = NEURON_VARIANTS[variant]
     env = Go2NavEnv(shift_cfg(0.20))
-    succ, _ = rollout(env, _load(ROOT / path, seed, plastic), seed, n_eps)
+    succ, _, _ = rollout(env, _load(ROOT / path, seed, plastic), seed, n_eps)
     env.close()
     return variant, seed, float(succ.mean())
 
@@ -244,33 +250,55 @@ def part_neuron(args):
 
 # -------------------------------------------------------------------- traj
 def part_traj(args):
-    """Frozen path vs R-STDP's first post-shift episode vs after adaptation."""
-    seed = 6000
+    """Frozen path vs R-STDP's first post-shift episode vs after adaptation.
+
+    FIXED (2026): the original version took ONE obstacle snapshot at the very
+    end, after all three episodes had run, and used it as the background for
+    all three paths. Static obstacles don't move so that was fine for them,
+    but DYNAMIC obstacles (nonzero vx/vy in privileged_state) do -- the
+    snapshot showed wherever they ended up after the LAST episode, not where
+    they actually were during the (earlier, separate) frozen or first-post-
+    shift episodes. Confirmed via scripts/m4b_traj_diag.py: both a frozen-SNN
+    and an R-STDP collision in this exact seed were WITH a dynamic obstacle,
+    at positions the old single snapshot did not represent. Now each episode
+    keeps its own end-of-episode snapshot; static obstacles (shared, constant)
+    draw once as background, dynamic ones draw per-trajectory in that
+    trajectory's own colour."""
+    seed = args.seed
     env = Go2NavEnv(shift_cfg(0.20))
-    _, frozen_paths = rollout(env, build("Frozen SNN", seed), seed, 1, log_positions=True)
+    succ_f, frozen_paths, obst_f = rollout(env, build("Frozen SNN", seed), seed, 1, log_positions=True)
     rstdp = build("R-STDP SNN", seed)
-    _, first = rollout(env, rstdp, seed, 1, log_positions=True)
+    succ_1, first, obst_1 = rollout(env, rstdp, seed, 1, log_positions=True)
     rollout(env, rstdp, seed + 1, 12)                       # adaptation block
-    _, late = rollout(env, rstdp, seed, 1, log_positions=True)
-    obst = [(o[0], o[1], o[2]) for o in env.privileged_state()[3]]
+    succ_l, late, obst_l = rollout(env, rstdp, seed, 1, log_positions=True)
     goal, radius, half = env.goal, env.cfg.goal_radius_m, env.cfg.arena_size_m / 2
     env.close()
+    print(f"seed {seed}: frozen reached={bool(succ_f[0])}  first reached={bool(succ_1[0])}  "
+          f"late reached={bool(succ_l[0])}")
+
+    static = [(o[0], o[1], o[2]) for o in obst_f[0] if o[3] == 0.0 and o[4] == 0.0]
 
     fig, ax = plt.subplots(figsize=(6.5, 6.5))
-    for (x, y, rad) in obst:
-        ax.add_patch(plt.Circle((x, y), rad, color="#2c5f9e", alpha=0.45))
+    for (x, y, rad) in static:
+        ax.add_patch(plt.Circle((x, y), rad, color="#2c5f9e", alpha=0.35))
     ax.add_patch(plt.Circle(goal, radius, color="#1f9d3a", alpha=0.5))
-    for path, colour, lab in [(frozen_paths[0], "#7f8c8d", "frozen SNN"),
-                              (first[0], "#e67e22", "R-STDP, first post-shift ep"),
-                              (late[0], "#c0392b", "R-STDP, after 12 adaptation eps")]:
+    for path, obst_snap, colour, lab in [
+            (frozen_paths[0], obst_f[0], "#7f8c8d", "frozen SNN"),
+            (first[0], obst_1[0], "#e67e22", "R-STDP, first post-shift ep"),
+            (late[0], obst_l[0], "#c0392b", "R-STDP, after 12 adaptation eps")]:
         ax.plot(path[:, 0], path[:, 1], lw=2, color=colour, label=lab)
         ax.scatter([path[-1, 0]], [path[-1, 1]], color=colour, marker="x", s=60)
+        for (x, y, rad, vx, vy) in obst_snap:
+            if vx != 0.0 or vy != 0.0:   # this trajectory's OWN dynamic-obstacle end state
+                ax.add_patch(plt.Circle((x, y), rad, fill=False, ls="--", lw=1.3,
+                                        color=colour, alpha=0.8))
     ax.set_xlim(-half, half); ax.set_ylim(-half, half); ax.set_aspect("equal")
     ax.legend(frameon=False, fontsize=8)
-    ax.set_title("M4b-3: trajectories under 20% sensor dropout (seed 6000)")
-    fig.tight_layout(); fig.savefig(OUT / "fig_trajectory_overlay.png",
+    ax.set_title(f"M4b-3: trajectories under 20% sensor dropout (seed {seed})\n"
+                 f"solid blue = static obstacles; dashed = each path's own dynamic obstacles at episode end")
+    fig.tight_layout(); fig.savefig(OUT / f"fig_trajectory_overlay_seed{seed}.png",
                                     bbox_inches="tight", dpi=150)
-    print(f"wrote {OUT/'fig_trajectory_overlay.png'}")
+    print(f"wrote {OUT/f'fig_trajectory_overlay_seed{seed}.png'}")
 
 
 def main():
@@ -278,6 +306,7 @@ def main():
     ap.add_argument("--part", required=True,
                     choices=["severity", "masks", "neuron", "traj"])
     ap.add_argument("--episodes", type=int, default=10)
+    ap.add_argument("--seed", type=int, default=6000, help="only used by --part traj")
     args = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
     {"severity": part_severity, "masks": part_masks,

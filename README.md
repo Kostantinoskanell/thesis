@@ -77,7 +77,7 @@ frozen network after a shift?
 
 <div class="gif-row">
 <figure><img src="archive/D3_go2_nav_env/nav_episode.gif" alt="Go2 navigating with a mid-episode shift"><figcaption class="cap">the task: goal + obstacles + mid-episode shift</figcaption></figure>
-<figure><img src="archive/M1b_expert/episode.gif" alt="Scripted A* expert episode"><figcaption class="cap">privileged A* teacher (imitation-data source)</figcaption></figure>
+<figure><img src="archive/M1b_expert/episode.gif" alt="Scripted A* expert episode"><figcaption class="cap">privileged A* teacher, original 2D kinematic env (pre-MuJoCo)</figcaption></figure>
 <figure><img src="archive/M4b_terrain_walk_compare/snn_rstdp_sand.gif" alt="R-STDP recovering on sand"><figcaption class="cap">R-STDP on sand: closes the gap to the MLP</figcaption></figure>
 <figure><img src="archive/M4b_terrain_walk_compare/snn_rstdp_ice_mu028_warm15.gif" alt="R-STDP recovering on ice"><figcaption class="cap">R-STDP on ice (mu=0.28): 40% vs frozen 27%</figcaption></figure>
 </div>
@@ -151,7 +151,7 @@ rate coding *samples* the sensor, so noise compounds with sampling noise.
 <div class="gif-row">
 <figure><img src="archive/M4b_extras/fig_severity_sweep.png" alt="severity sweep figure"></figure>
 <figure><img src="archive/M6_energy/fig_m6_energy.png" alt="energy breakdown figure"></figure>
-<figure><img src="archive/M6_energy/fig_h4_noise_high.png" alt="noise sweep figure"></figure>
+<figure><img src="archive/M6_energy/fig_h4_noise_full.png" alt="noise sweep figure"></figure>
 <figure><img src="archive/M4b_extras/fig_trajectory_overlay.png" alt="trajectory overlay figure"></figure>
 <figure><img src="archive/M4_pilot_go2/fig_pilot_sensor.png" alt="M4 pilot recovery figure"></figure>
 <figure><img src="archive/M0_scaffold/fig_stdp_kernel.png" alt="STDP kernel golden reference"></figure>

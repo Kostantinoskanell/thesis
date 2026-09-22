@@ -105,7 +105,11 @@ here — there is no statistical distortion for it to undo.
 Additive LiDAR noise swept on the base distribution (no dropout shift) so that
 noise-robustness is isolated from shift-recovery. 5 seeds × 10 eps per point, 95% CI
 across seeds. Stitched from two runs with identical seeds/config:
-`noise_sweep.md` (σ ≤ 0.2) and `noise_sweep_high.md` (σ ≥ 0.3).
+`noise_sweep.md` (σ ≤ 0.2) and `noise_sweep_high.md` (σ ≥ 0.3) — combined into one
+figure and one full-range slope/N50 fit in `noise_sweep_full.md` /
+`fig_h4_noise_full.png` (a first cut only plotted the σ≥0.3 half next to a table
+covering the full range, which left the figure's x-axis starting at 0.3 with no
+context).
 
 | controller | σ=0 | σ=0.05 | σ=0.1 | σ=0.2 | σ=0.3 | σ=0.5 | σ=0.8 |
 |---|---|---|---|---|---|---|---|
@@ -119,9 +123,9 @@ across seeds. Stitched from two runs with identical seeds/config:
 Up to σ ≤ 0.2 nothing separates (the earlier "inconclusive" reading was correct: the
 range was too mild). Once the perturbation actually bites, the ordering is the **opposite
 of the H4 hypothesis**: the **frozen MLP is essentially noise-immune across the whole
-range** (42% → 38% at σ=0.8, slope −0.6 pts/0.1σ) while the **frozen SNN falls by more
-than half** (≈45% → 18%, slope −1.8). Online MLP collapses only at the extreme
-(N50 = 0.685), and TM-NORM dies completely (0% at σ=0.8).
+range** (42% → 38% at σ=0.8, full-range fitted slope −1.3 pts/0.1σ) while the **frozen
+SNN falls by more than half** (≈45% → 18%, slope −4.2). Online MLP collapses only at
+the extreme (N50 = 0.638), and TM-NORM dies completely (0% at σ=0.8).
 
 **Interpretation — this is a rate-coding cost, and it is mechanistically coherent.** The
 SNN does not read the LiDAR value; it *samples* it, Poisson-rate-coding nearness over
@@ -143,4 +147,5 @@ So the nav layer's neuromorphic scorecard is **mixed and specific**: energy — 
 conda run -n nmc python scripts/m6_energy.py
 conda run -n nmc python scripts/m6_noise_sweep.py
 conda run -n nmc python scripts/m6_noise_sweep.py --levels 0.3 0.5 0.8 --tag _high
+conda run -n nmc python scripts/m6_noise_stitch.py   # combines both into one figure/table
 ```

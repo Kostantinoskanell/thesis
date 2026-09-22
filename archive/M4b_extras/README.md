@@ -72,6 +72,31 @@ across-mask spread (15.9% vs 9.2%) — plasticity adds variance.
 Frozen SNN vs R-STDP's first post-shift episode vs R-STDP after 12 adaptation episodes,
 same seed/layout, 20% dropout — the qualitative companion to the numbers above.
 
+**Fixed a real bug found by visual inspection:** the first cut took ONE obstacle
+snapshot after the last of the three episodes and used it as the shared background
+for all three paths. Static obstacles don't move so that was fine for them, but
+DYNAMIC obstacles do — the snapshot showed wherever they'd ended up after the LATEST
+episode, not where they actually were during the (separate, earlier) frozen or
+first-post-shift episodes. Confirmed via `scripts/m4b_traj_diag.py`: both a frozen-SNN
+and an R-STDP collision in this exact seed were with a dynamic obstacle, at positions
+the old single snapshot did not represent — the bearing was also OUTSIDE the dead-beam
+sector at the moment of impact, so this was never a blind-spot effect, just a narrow
+map chokepoint a mover happened to be near. Now each episode keeps its own end-of-
+episode obstacle snapshot (`rollout()` returns it); static obstacles draw once as
+shared background, dynamic ones draw per-trajectory in that trajectory's own colour.
+
+**Checked 4 seeds (6000/6001/6003/6006) looking for a more illustrative example
+before settling on one** — across all 12 logged episodes (4 seeds x 3 trajectories
+each), **zero reached the goal**. That is not a fluke: M5 measured ~20% success at
+this severity for both frozen SNN and R-STDP, so 0/12 is an unsurprising draw from
+that rate, not evidence of anything additionally broken. Deliberately did NOT keep
+searching for a seed where someone succeeds — doing so would be quiet cherry-picking
+against a result that fails 4 times out of 5, and would visually misrepresent the
+finding. The figure is kept as an honest illustration that the three trajectories are
+visually indistinguishable in outcome, which is the correct picture of a null result,
+not a shortcoming of the demo. The other 3 seeds' figures are kept in this folder
+(`fig_trajectory_overlay_seed*.png`) for transparency.
+
 ## M4b-6 — firing-rate distribution shift
 Run as part of M6 (it needs the same spike instrumentation); see
 [`../M6_energy/README.md`](../M6_energy/README.md). Summary: the shift barely moves the

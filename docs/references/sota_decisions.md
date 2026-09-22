@@ -829,7 +829,7 @@ R-STDP also shows larger across-mask variance (15.9% vs 9.2%): plasticity adds s
 **Finding 7 — H4 is REFUTED: the MLP degrades more gracefully than the SNN.** Within
 σ ≤ 0.2 nothing separates (that range is simply too mild). Extending to σ=0.8 makes the
 ordering clear and it is the *opposite* of the hypothesis: the frozen **MLP is essentially
-noise-immune** (42% → 38%, slope −0.6 pts/0.1σ) while the frozen **SNN loses more than
+noise-immune** (42% → 38%, slope −1.3 pts/0.1σ) while the frozen **SNN loses more than
 half** (≈45% → 18%, −1.8); online-MLP collapses only at the extreme (N50 = 0.685) and
 TM-NORM dies outright (0%). Mechanism, and it is coherent rather than a fluke: the SNN
 does not read the LiDAR, it **Poisson-samples** it over T=20 ticks, so additive input
