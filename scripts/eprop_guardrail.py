@@ -47,7 +47,14 @@ def run_block(eta, seed, n_eps=24):
 
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
-    etas = [0.005, 0.01, 0.02, 0.05, 0.1, 0.2]
+    # extended downward: an ad hoc single-seed probe (0.01/0.05/0.1) showed
+    # degradation even at the smallest value tested, with weight norms
+    # growing smoothly (finite, not diverging) -- suggesting e-prop's
+    # eligibility trace has a larger natural scale than R-STDP's (no small
+    # hand-tuned amplitude constant like STDP's a_plus=0.008), so the same
+    # eta produces a bigger update. Scan low enough to actually find a safe
+    # point rather than defaulting to "least-bad of an insufficient range".
+    etas = [0.0005, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2]
     seeds = list(range(6000, 6005))
     tasks = [(eta, s) for eta in etas for s in seeds]
     print(f"guardrail: {len(tasks)} tasks...", flush=True)
