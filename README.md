@@ -78,8 +78,8 @@ frozen network after a shift?
 <div class="gif-row">
 <figure><img src="archive/D3_go2_nav_env/nav_episode.gif" alt="Go2 navigating with a mid-episode shift"><figcaption class="cap">the task: goal + obstacles + mid-episode shift</figcaption></figure>
 <figure><img src="archive/M1b_expert/episode.gif" alt="Scripted A* expert episode"><figcaption class="cap">privileged A* teacher, original 2D kinematic env (pre-MuJoCo)</figcaption></figure>
-<figure><img src="archive/M4b_terrain_walk_compare/snn_rstdp_sand.gif" alt="R-STDP recovering on sand"><figcaption class="cap">R-STDP on sand: closes the gap to the MLP</figcaption></figure>
-<figure><img src="archive/M4b_terrain_walk_compare/snn_rstdp_ice_mu028_warm15.gif" alt="R-STDP recovering on ice"><figcaption class="cap">R-STDP on ice (mu=0.28): 40% vs frozen 27%</figcaption></figure>
+<figure><img src="archive/M4b_terrain_walk_compare/snn_rstdp_sand.gif" alt="R-STDP recovering on sand"><figcaption class="cap">R-STDP on sand: one verified success (aggregate stat being re-checked)</figcaption></figure>
+<figure><img src="archive/M4b_terrain_walk_compare/snn_rstdp_ice_mu028_warm15.gif" alt="R-STDP recovering on ice"><figcaption class="cap">R-STDP on ice, mu=0.28: verified success</figcaption></figure>
 </div>
 
 **Core comparison, sensor dropout (10 seeds x 30 eps each, 95% CI, Holm-corrected):**
@@ -122,6 +122,10 @@ severity sweep below.
 |---|---|---|---|
 | Sand (mu=1.20) | 47% | 27% | **47%** (full recovery) |
 | Ice (mu=0.28) | 33% | 27% | **40%** (beats both) |
+
+Original numbers at n=15, one seed -- the same thin sample size that turned out
+not to replicate for sensor dropout (below). A multi-seed, Holm-corrected
+re-check is in progress; see `archive/M4c_rigorous/README.md` once it lands.
 
 **Energy per decision, 45 nm Horowitz model (nJ):**
 
