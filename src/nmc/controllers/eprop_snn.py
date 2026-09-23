@@ -44,7 +44,12 @@ class EPropNavController:
         for i, W in enumerate(Ws):
             bound = w_bound_scale * float(np.abs(W).max())
             cfg = EPropConfig(eta=eta, w_min=-bound, w_max=bound)
-            self.layers.append(ALIFEpropLayer(W, cfg, rng=self.rng))
+            # non-plastic layers skip the O(n_post*n_pre) eligibility bookkeeping
+            # entirely (never consolidated, so never read) -- a real, measured
+            # perf win: the middle hidden layer (512x512) is the single largest
+            # in the network and was previously paying this cost for nothing.
+            self.layers.append(ALIFEpropLayer(W, cfg, rng=self.rng,
+                                              track_eligibility=(i in self.plastic_layers)))
             if i in self.plastic_layers:
                 self.W0[i] = W.copy()
 

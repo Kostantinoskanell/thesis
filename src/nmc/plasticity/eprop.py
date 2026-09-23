@@ -74,22 +74,29 @@ class ALIFEpropLayer:
     post-neurons.
     """
 
-    def __init__(self, W: np.ndarray, cfg: EPropConfig, rng: np.random.Generator | None = None):
+    def __init__(self, W: np.ndarray, cfg: EPropConfig, rng: np.random.Generator | None = None,
+                 track_eligibility: bool = True):
         self.cfg = cfg
         self.W = W  # (n_post, n_pre), shared reference -- caller owns the array
         self.n_post, self.n_pre = W.shape
         self.rng = rng or np.random.default_rng(0)
+        # PERFORMANCE: the eligibility trace (eps_a, e_acc) is an O(n_post*n_pre)
+        # dense update every timestep -- expensive, and pointless for a layer
+        # that is never consolidated (e.g. a large non-plastic hidden layer).
+        # Only plastic layers need it; non-plastic ones still need the plain
+        # forward pass (their spikes feed the next layer).
+        self.track_eligibility = track_eligibility
         self.reset_state()
 
     def reset_state(self):
         self.mem = np.zeros(self.n_post)
         self.a = np.zeros(self.n_post)
-        self.zbar = np.zeros(self.n_pre)       # low-pass presynaptic trace
-        self.eps_a = np.zeros((self.n_post, self.n_pre))  # adaptation eligibility
-        self.e_acc = np.zeros((self.n_post, self.n_pre))  # eligibility accumulated over the window
-        self._h_prev = np.zeros(self.n_post)
-        self._zbar_prev = np.zeros(self.n_pre)
-        self.spike_history: list[np.ndarray] = []
+        if self.track_eligibility:
+            self.zbar = np.zeros(self.n_pre)       # low-pass presynaptic trace
+            self.eps_a = np.zeros((self.n_post, self.n_pre))  # adaptation eligibility
+            self.e_acc = np.zeros((self.n_post, self.n_pre))  # eligibility accumulated over the window
+            self._h_prev = np.zeros(self.n_post)
+            self._zbar_prev = np.zeros(self.n_pre)
 
     def step_forward(self, pre_spikes: np.ndarray) -> np.ndarray:
         """Advance one timestep. pre_spikes: (n_pre,) binary. Returns this
@@ -101,24 +108,24 @@ class ALIFEpropLayer:
         thr = c.v_th + c.beta_adapt * self.a
         x = self.mem - thr
         spk = (x > 0.0).astype(np.float64)   # matches snnTorch surrogate forward: torch.gt(input, 0)
-        h = pseudo_derivative(x, c.surrogate_slope)
 
-        # ALIF eligibility trace (Bellec et al. 2020, hard-reset ALIF variant):
-        # eps_a tracks how past (pre,post) pairing still influences the
-        # CURRENT adaptive threshold (this is what gives e-prop -- unlike
-        # plain LIF -- a long credit-assignment horizon).
-        outer_prev = self._h_prev[:, None] * self._zbar_prev[None, :]
-        self.eps_a = outer_prev + (c.rho - self._h_prev[:, None] * c.beta_adapt) * self.eps_a
-        e_t = h[:, None] * (self.zbar[None, :] - c.beta_adapt * self.eps_a)
-        self.e_acc += e_t
+        if self.track_eligibility:
+            h = pseudo_derivative(x, c.surrogate_slope)
+            # ALIF eligibility trace (Bellec et al. 2020, hard-reset ALIF variant):
+            # eps_a tracks how past (pre,post) pairing still influences the
+            # CURRENT adaptive threshold (this is what gives e-prop -- unlike
+            # plain LIF -- a long credit-assignment horizon).
+            outer_prev = self._h_prev[:, None] * self._zbar_prev[None, :]
+            self.eps_a = outer_prev + (c.rho - self._h_prev[:, None] * c.beta_adapt) * self.eps_a
+            e_t = h[:, None] * (self.zbar[None, :] - c.beta_adapt * self.eps_a)
+            self.e_acc += e_t
+            self._h_prev = h
+            self._zbar_prev = self.zbar.copy()
+            self.zbar = c.beta * self.zbar + pre_spikes
 
         # advance state for next step
         self.mem = self.mem - spk * thr             # subtractive reset
         self.a = c.rho * self.a + spk
-        self._h_prev = h
-        self._zbar_prev = self.zbar.copy()
-        self.zbar = c.beta * self.zbar + pre_spikes
-        self.spike_history.append(spk)
         return spk
 
     def consolidate(self, post_learning_signal: np.ndarray, anchor: float = 0.0,
