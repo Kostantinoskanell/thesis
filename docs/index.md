@@ -5,6 +5,8 @@ title: Home
 
 # Memristor-Inspired Neuromorphic Control for Robotics
 
+[How the SNN pieces work &rarr;](concepts.md) &middot; LIF/ALIF, STDP, R-STDP, e-prop, population coding, and where each one lives in the code.
+
 Undergraduate thesis work (ECE, University of Patras). A hardware-software
 co-design comparing a spiking neural network (SNN) with reward-modulated STDP
 (R-STDP) against DNN/RL baselines, on a real Unitree Go2 quadruped simulated
@@ -35,6 +37,8 @@ insertion points (M-track and L-track) against the same frozen baseline.
 | R-STDP | STDP accumulates into an eligibility trace `e_ij`; a reward/TD-error `r(t)` gates consolidation: `dw = eta * r(t) * e_ij`. |
 | Memristor analogy | Conductance `g` in `[g_min, g_max]` &equiv; synaptic weight; the FPGA reproduces this *structure* (state retention, saturation, locality), not the device physics. |
 
+Full equations, code pointers, and how e-prop and population coding fit in: [**How the SNN pieces work &rarr;**](concepts.md)
+
 ## Results at a glance
 
 | Track | Question | Metric | Result |
@@ -43,6 +47,7 @@ insertion points (M-track and L-track) against the same frozen baseline.
 | M (navigation) | Shift-robustness source | frozen-LIF vs frozen-ALIF | +10 pts (p=0.05) &mdash; it's the neuron model |
 | M (navigation) | R-STDP recovery vs frozen SNN | sensor dropout, 10 seeds x 30 eps | no significant effect (6 checks) |
 | M (navigation) | R-STDP recovery vs frozen SNN | terrain (sand/ice), 10 seeds | no significant effect either (D18) |
+| M (navigation) | e-prop recovery vs frozen SNN | sensor dropout, identical protocol | also no significant effect (D19) &mdash; null generalizes beyond R-STDP |
 | M (navigation) | Noise robustness (H4) | success at sigma=0.8 | MLP 38% vs SNN 18% &mdash; refuted |
 | L (locomotion) | Energy vs MLP | best config (T=5, sparsity-regularized) | 1.04x cheaper |
 | L (locomotion) | R-STDP on the gait | icy terrain | destabilizes it (honest negative) |
@@ -130,7 +135,18 @@ The n=15/one-seed numbers above (sand: R-STDP 47% "closes the gap"; ice: R-STDP 
 | Ice (mu=0.28) | 44.7% | 29.0% | 34.0% | +5.0 pts, p=0.393 (n.s.) | -10.7 pts, p=0.156 (n.s.) |
 | Sand (mu=1.20) | 55.0% | 42.7% | 40.3% | -2.3 pts, p=0.626 (n.s., numerically worse) | **-14.7 pts, p=0.019 (SIGNIFICANTLY worse)** |
 
-On sand -- the condition M4c's headline claim rested on -- R-STDP is not "closing the gap to the MLP", it is **significantly further from the MLP than the frozen SNN is**. **R-STDP currently has no surviving significant recovery advantage on any shift type tested** (sensor dropout, terrain sand, terrain ice). See `docs/references/sota_decisions.md` D18 for the full account, and the overnight shift-taxonomy sweep (sensor_bias/sensor_range/goal_drift) and e-prop test for the remaining open questions.
+On sand -- the condition M4c's headline claim rested on -- R-STDP is not "closing the gap to the MLP", it is **significantly further from the MLP than the frozen SNN is**. **R-STDP currently has no surviving significant recovery advantage on any shift type tested** (sensor dropout, terrain sand, terrain ice). See `docs/references/sota_decisions.md` D18 for the full account.
+
+**Is it the rule, or the problem? e-prop says: the problem.** e-prop (Bellec et al. 2020) is a structurally different three-factor rule -- a neuron-dynamics-derived eligibility trace and per-neuron symmetric feedback, instead of R-STDP's Hebbian trace and one global reward scalar (see [How the SNN pieces work](concepts.md)). Tested under the identical sensor-dropout protocol (10 seeds x 30 eps, Holm-corrected, with Frozen SNN and R-STDP SNN re-run fresh alongside it for a real matched-data comparison, not a comparison against old summary statistics):
+
+| dropout | e-prop vs | delta | Holm-corrected p | significant? |
+|---|---|---|---|---|
+| 0.30 | Frozen SNN | +0.3 pts | 0.902 | no |
+| 0.30 | R-STDP SNN | +2.7 pts | 0.711 | no |
+| 0.20 | Frozen SNN | +7.3 pts | 0.231 | no |
+| 0.20 | R-STDP SNN | +9.3 pts | 0.078 | no |
+
+e-prop does not show a significant advantage over frozen SNN either -- the null result **generalizes beyond R-STDP specifically**. Combined with the neuron-model ablation above (frozen ALIF alone: +10 pts that no plasticity rule tested has topped), the most defensible reading is that **the neuron model, not online synaptic plasticity, is doing the shift-robustness work** in this setup. Full record: [`archive/D1_eprop/README.md`](https://github.com/Kostantinoskanell/thesis/tree/main/archive/D1_eprop), decision log: `docs/references/sota_decisions.md` D19. Remaining open question: the overnight shift-taxonomy sweep (sensor_bias/sensor_range/goal_drift), since the shift-dependence hypothesis may still hold for a shift class not yet tried.
 
 **Energy per decision, 45 nm Horowitz model (nJ):**
 

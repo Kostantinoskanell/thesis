@@ -6,7 +6,7 @@ trade-off here rather than silently choosing.**
 
 ---
 
-## D1. Online learning rule: R-STDP  vs  e-prop  (OPEN — recommend upgrade)
+## D1. Online learning rule: R-STDP  vs  e-prop  (RESOLVED — e-prop implemented and tested, see D19)
 
 **Conventional / currently locked:** reward-modulated STDP (R-STDP) — a three-factor
 rule: Hebbian eligibility trace × global reward.
@@ -914,6 +914,52 @@ still hold for a shift class not yet tried; (b) e-prop (D1), a structurally
 different three-factor rule, tested under identical conditions
 (`archive/D1_eprop/`) to separate "the rule" from "the problem" as the cause
 of R-STDP's null results so far.
+
+---
+
+## D19. e-prop (D1) tested where R-STDP failed — the null result generalizes beyond R-STDP
+
+**Question (from D1/D18):** is R-STDP's lack of any surviving significant recovery
+advantage (sensor dropout, terrain sand, terrain ice, custom map) about **the rule**
+(a purely Hebbian trace + one global reward scalar) or **the problem** (this shift,
+this network, this closed-loop-RL interface)? e-prop (Bellec et al. 2020) is a
+structurally different three-factor rule — its eligibility trace comes from the
+neuron's own membrane/adaptation dynamics (an online BPTT approximation, using the
+*same* FastSigmoid surrogate already used for M3's offline pretraining) and its third
+factor is a per-neuron symmetric-feedback signal, not one broadcast scalar. Implemented
+from scratch in `src/nmc/plasticity/eprop.py` / `src/nmc/controllers/eprop_snn.py`,
+independently NumPy-parity-checked against the real PyTorch network (20/20 actions
+matched, max diff 0.0 at eta=0).
+
+**Method:** an eta guardrail sweep (base distribution, no shift) found eta=0.005 is the
+largest learning rate that stays within 10 pts of the frozen baseline with finite
+weights (`archive/D1_eprop/guardrail.md`). At that eta, e-prop was then tested under
+the exact sensor-dropout protocol R-STDP was tested under in M5 (10 seeds x 30 eps,
+both severities) — with Frozen SNN and R-STDP SNN **re-run fresh in the same pass**
+(not compared against old summary numbers) so the comparison is a real paired Welch
+t-test on matched raw per-seed data, Holm-Bonferroni corrected across all 4
+comparisons (`scripts/eprop_rigor2.py`, `archive/D1_eprop/rigor2.md`,
+`raw_success_rates.csv`). A first pass (`eprop_rigor.py`) had skipped both of those
+corrections and produced an enticing but unreliable raw p=0.019 — flagged and
+corrected before being trusted, the same discipline D16/D18 already established.
+
+**Result:**
+
+| dropout | e-prop vs | delta | Holm-corrected p | significant? |
+|---|---|---|---|---|
+| 0.30 | Frozen SNN | +0.3 pts | 0.902 | no |
+| 0.30 | R-STDP SNN | +2.7 pts | 0.711 | no |
+| 0.20 | Frozen SNN | +7.3 pts | 0.231 | no |
+| 0.20 | R-STDP SNN | +9.3 pts | 0.078 | no |
+
+**Decision: e-prop does not show a Holm-corrected significant advantage over frozen
+SNN either.** The null result generalizes beyond R-STDP specifically. Combined with
+D17's neuron-model ablation (frozen ALIF alone gains +10 pts that no plasticity rule
+tested has improved on), the most defensible reading is that **the neuron model, not
+online synaptic plasticity, is what's doing the shift-robustness work** in this
+setup — a genuine, honestly-negative result about online RL-adapted local learning
+rules at this network scale, obtained by testing a second, structurally different
+rule rather than concluding from R-STDP alone. Full write-up: `archive/D1_eprop/README.md`.
 
 ---
 

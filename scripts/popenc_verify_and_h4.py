@@ -43,11 +43,18 @@ def load_ctrl(ckpt_path):
 
 
 def _parity_task(ckpt_path, seed, n_eps):
+    # NOTE: PopEncNavController is fully deterministic (no RNG anywhere in
+    # snn_popenc.py) -- the only thing that can vary between "seeds" here is
+    # which env episodes get sampled, so `seed` must feed env.reset(), not be
+    # a fixed constant (a prior version used env.reset(seed=4000+ep) here,
+    # ignoring the seed arg entirely -- all 3 "seeds" then ran the identical
+    # 20 episodes and trivially agreed, reporting a fake +/-0.0% SD across
+    # what was actually just one 20-episode run, not 60 independent ones).
     env = Go2NavEnv(Go2NavConfig(shift_time_s=1e9, episode_len_s=60.0))
     ctrl = load_ctrl(ckpt_path)
     succ = []
     for ep in range(n_eps):
-        obs, _ = env.reset(seed=4000 + ep)
+        obs, _ = env.reset(seed=seed * 100 + ep)
         while True:
             a = ctrl.act(obs)
             nobs, r, term, trunc, info = env.step(a)
