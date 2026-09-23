@@ -3,6 +3,17 @@ layout: default
 title: Home
 ---
 
+<a id="top"></a>
+
+<nav class="site-nav" aria-label="Section navigation">
+  <a href="#d-track" class="nav-d">D &middot; foundation</a>
+  <a href="#m-track" class="nav-m">M &middot; navigation</a>
+  <a href="#l-track" class="nav-l">L &middot; locomotion</a>
+  <a href="concepts.md" class="nav-c">Concepts</a>
+  <a href="https://github.com/Kostantinoskanell/thesis/blob/main/docs/references/sota_decisions.md">Decision log</a>
+  <a href="https://github.com/Kostantinoskanell/thesis" class="nav-gh">GitHub</a>
+</nav>
+
 # Memristor-Inspired Neuromorphic Control for Robotics
 
 [How the SNN pieces work &rarr;](concepts.md) &middot; LIF/ALIF, STDP, R-STDP, e-prop, population coding, and where each one lives in the code.
@@ -26,7 +37,7 @@ Two-layer control, closed loop, under a shift: a navigator decides *where to
 go*, a locomotion policy walks the robot there. R-STDP is tested at both
 insertion points (M-track and L-track) against the same frozen baseline.
 
-## Core mechanisms
+## Core mechanisms {: .track-c #concepts}
 
 <img src="assets/img/concepts.svg" alt="LIF neuron, STDP, R-STDP, memristor analogy">
 
@@ -41,22 +52,27 @@ Full equations, code pointers, and how e-prop and population coding fit in: [**H
 
 ## Results at a glance
 
-| Track | Question | Metric | Result |
-|---|---|---|---|
-| M (navigation) | Energy vs MLP | SynOps / full accounting | 10.4x / 2.4x cheaper |
-| M (navigation) | Shift-robustness source | frozen-LIF vs frozen-ALIF | +10 pts (p=0.05) &mdash; it's the neuron model |
-| M (navigation) | R-STDP recovery vs frozen SNN | sensor dropout, 10 seeds x 30 eps | no significant effect (6 checks) |
-| M (navigation) | R-STDP recovery vs frozen SNN | terrain (sand/ice), 10 seeds | no significant effect either (D18) |
-| M (navigation) | e-prop recovery vs frozen SNN | sensor dropout, identical protocol | also no significant effect (D19) &mdash; null generalizes beyond R-STDP |
-| M (navigation) | Noise robustness (H4) | success at sigma=0.8 | MLP 38% vs SNN 18% &mdash; refuted |
-| L (locomotion) | Energy vs MLP | best config (T=5, sparsity-regularized) | 1.04x cheaper |
-| L (locomotion) | R-STDP on the gait | icy terrain | destabilizes it (honest negative) |
-| L (locomotion) | Walking policy | spiking-network-controlled Go2 | first working one found in lit. search |
-| D (foundation) | Locomotion policy | trained from scratch, PPO | bit-exact sim-to-Windows parity |
+*Click any question to jump straight to the full result.*
+
+<table class="quick-links" markdown="0">
+<thead><tr><th>Track</th><th>Question</th><th>Metric</th><th>Result</th></tr></thead>
+<tbody>
+<tr><td>M (navigation)</td><td><a href="#m-energy">Energy vs MLP</a></td><td>SynOps / full accounting</td><td>10.4x / 2.4x cheaper</td></tr>
+<tr><td>M (navigation)</td><td><a href="#m-neuron-ablation">Shift-robustness source</a></td><td>frozen-LIF vs frozen-ALIF</td><td>+10 pts (p=0.05) &mdash; it's the neuron model</td></tr>
+<tr><td>M (navigation)</td><td><a href="#m-rstdp-dropout">R-STDP recovery vs frozen SNN</a></td><td>sensor dropout, 10 seeds x 30 eps</td><td>no significant effect (6 checks)</td></tr>
+<tr><td>M (navigation)</td><td><a href="#m-rstdp-terrain">R-STDP recovery vs frozen SNN</a></td><td>terrain (sand/ice), 10 seeds</td><td>no significant effect either (D18)</td></tr>
+<tr><td>M (navigation)</td><td><a href="#m-eprop">e-prop recovery vs frozen SNN</a></td><td>sensor dropout, identical protocol</td><td>also no significant effect (D19) &mdash; null generalizes beyond R-STDP</td></tr>
+<tr><td>M (navigation)</td><td><a href="#m-noise">Noise robustness (H4)</a></td><td>success at sigma=0.8</td><td>MLP 38% vs SNN 18% &mdash; refuted</td></tr>
+<tr><td>L (locomotion)</td><td><a href="#l-energy">Energy vs MLP</a></td><td>best config (T=5, sparsity-regularized)</td><td>1.04x cheaper</td></tr>
+<tr><td>L (locomotion)</td><td><a href="#l-rstdp">R-STDP on the gait</a></td><td>icy terrain</td><td>destabilizes it (honest negative)</td></tr>
+<tr><td>L (locomotion)</td><td><a href="#l-walking">Walking policy</a></td><td>spiking-network-controlled Go2</td><td>first working one found in lit. search</td></tr>
+<tr><td>D (foundation)</td><td><a href="#d-policy">Locomotion policy</a></td><td>trained from scratch, PPO</td><td>bit-exact sim-to-Windows parity</td></tr>
+</tbody>
+</table>
 
 ---
 
-## D &mdash; dynamics foundation
+## D &mdash; dynamics foundation {: .track-d #d-track}
 
 Go2 stands and walks under full physics before any plasticity science runs;
 no pretrained policy existed, so one was trained from scratch and exported to
@@ -75,11 +91,17 @@ a bit-exact Windows runtime.
 | D3a | NumPy-vs-JAX parity, max err 2.7e-7 |
 | D3 | dynamic nav env: LiDAR raycast + obstacles + shift, ~20x realtime |
 
+<a id="d-policy"></a>D2's locomotion policy (**bit-exact sim-to-Windows parity**, D3a) is the
+walking substrate every controller in the M-track and the frozen baseline of
+the L-track both drive.
+
 Details: [`D2_go2_rl_go2model`](https://github.com/Kostantinoskanell/thesis/tree/main/archive/D2_go2_rl_go2model), [`D3a_policy_export_windows`](https://github.com/Kostantinoskanell/thesis/tree/main/archive/D3a_policy_export_windows), [`D3_go2_nav_env`](https://github.com/Kostantinoskanell/thesis/tree/main/archive/D3_go2_nav_env)
+
+[&uarr; back to top](#top){: .section-jump}
 
 ---
 
-## M &mdash; navigation layer
+## M &mdash; navigation layer {: .track-m #m-track}
 
 An SNN/MLP decides *where to go* from LiDAR; the D-track policy walks the
 robot there. Question: does releasing the SNN to R-STDP recover faster than a
@@ -92,7 +114,7 @@ frozen network after a shift?
 <figure><img src="https://raw.githubusercontent.com/Kostantinoskanell/thesis/main/archive/M4b_terrain_walk_compare/snn_rstdp_ice_mu028_warm15.gif" alt="R-STDP recovering on ice"><figcaption class="cap">R-STDP on ice, mu=0.28: verified success</figcaption></figure>
 </div>
 
-**Core comparison, sensor dropout (10 seeds x 30 eps each, 95% CI, Holm-corrected):**
+<a id="m-rstdp-dropout"></a>**Core comparison, sensor dropout (10 seeds x 30 eps each, 95% CI, Holm-corrected):**
 
 | Controller | Success @ dropout=0.30 | Success @ dropout=0.20 (corrected) | Recovery time (eps) |
 |---|---|---|---|
@@ -107,7 +129,7 @@ R-STDP vs frozen SNN: not significant at either severity (p=0.14, p=0.70).
 0.30 was M4's original pick and turned out already floored &mdash; see the
 severity sweep below.
 
-**Why: the neuron-model ablation (pre-registered, dropout=0.20, 10 seeds x 10 eps):**
+<a id="m-neuron-ablation"></a>**Why: the neuron-model ablation (pre-registered, dropout=0.20, 10 seeds x 10 eps):**
 
 | Variant | Success | vs. previous |
 |---|---|---|
@@ -126,7 +148,7 @@ severity sweep below.
 | R-STDP SNN | 48.0% | 24.0% | 12.0% | 12.0% |
 | TM-NORM SNN | 2.0% | 0.0% | 2.0% | 2.0% |
 
-**Terrain shift -- UPDATE: also does not replicate at rigor (and reverses on sand).**
+<a id="m-rstdp-terrain"></a>**Terrain shift -- UPDATE: also does not replicate at rigor (and reverses on sand).**
 
 The n=15/one-seed numbers above (sand: R-STDP 47% "closes the gap"; ice: R-STDP 40% "beats both") were the SAME kind of thin sample that turned out not to replicate for sensor dropout -- and a 10-seed/30-episode/Holm-corrected re-run (at the sand severity the original claim actually used, mu=1.20) confirms it, decisively:
 
@@ -137,7 +159,7 @@ The n=15/one-seed numbers above (sand: R-STDP 47% "closes the gap"; ice: R-STDP 
 
 On sand -- the condition M4c's headline claim rested on -- R-STDP is not "closing the gap to the MLP", it is **significantly further from the MLP than the frozen SNN is**. **R-STDP currently has no surviving significant recovery advantage on any shift type tested** (sensor dropout, terrain sand, terrain ice). See `docs/references/sota_decisions.md` D18 for the full account.
 
-**Is it the rule, or the problem? e-prop says: the problem.** e-prop (Bellec et al. 2020) is a structurally different three-factor rule -- a neuron-dynamics-derived eligibility trace and per-neuron symmetric feedback, instead of R-STDP's Hebbian trace and one global reward scalar (see [How the SNN pieces work](concepts.md)). Tested under the identical sensor-dropout protocol (10 seeds x 30 eps, Holm-corrected, with Frozen SNN and R-STDP SNN re-run fresh alongside it for a real matched-data comparison, not a comparison against old summary statistics):
+<a id="m-eprop"></a>**Is it the rule, or the problem? e-prop says: the problem.** e-prop (Bellec et al. 2020) is a structurally different three-factor rule -- a neuron-dynamics-derived eligibility trace and per-neuron symmetric feedback, instead of R-STDP's Hebbian trace and one global reward scalar (see [How the SNN pieces work](concepts.md)). Tested under the identical sensor-dropout protocol (10 seeds x 30 eps, Holm-corrected, with Frozen SNN and R-STDP SNN re-run fresh alongside it for a real matched-data comparison, not a comparison against old summary statistics):
 
 | dropout | e-prop vs | delta | Holm-corrected p | significant? |
 |---|---|---|---|---|
@@ -148,7 +170,7 @@ On sand -- the condition M4c's headline claim rested on -- R-STDP is not "closin
 
 e-prop does not show a significant advantage over frozen SNN either -- the null result **generalizes beyond R-STDP specifically**. Combined with the neuron-model ablation above (frozen ALIF alone: +10 pts that no plasticity rule tested has topped), the most defensible reading is that **the neuron model, not online synaptic plasticity, is doing the shift-robustness work** in this setup. Full record: [`archive/D1_eprop/README.md`](https://github.com/Kostantinoskanell/thesis/tree/main/archive/D1_eprop), decision log: `docs/references/sota_decisions.md` D19. Remaining open question: the overnight shift-taxonomy sweep (sensor_bias/sensor_range/goal_drift), since the shift-dependence hypothesis may still hold for a shift class not yet tried.
 
-**Energy per decision, 45 nm Horowitz model (nJ):**
+<a id="m-energy"></a>**Energy per decision, 45 nm Horowitz model (nJ):**
 
 | Controller | Inference | Neurons | Encoder | Learning | Total | vs. MLP |
 |---|---|---|---|---|---|---|
@@ -162,7 +184,7 @@ Literature-standard view (SynOps only): frozen SNN is **10.4x cheaper**. Per
 *successful* navigation, the win disappears: frozen SNN 2276 &mu;J vs. frozen
 MLP 2280 &mu;J &mdash; a dead heat.
 
-**Noise robustness (H4), success rate vs. LiDAR noise sigma:**
+<a id="m-noise"></a>**Noise robustness (H4), success rate vs. LiDAR noise sigma:**
 
 | Controller | 0 | 0.1 | 0.2 | 0.3 | 0.5 | 0.8 |
 |---|---|---|---|---|---|---|
@@ -184,19 +206,25 @@ rate coding *samples* the sensor, so noise compounds with sampling noise.
 
 Full write-ups: [`M5_full_comparison`](https://github.com/Kostantinoskanell/thesis/tree/main/archive/M5_full_comparison), [`M4b_extras`](https://github.com/Kostantinoskanell/thesis/tree/main/archive/M4b_extras), [`M6_energy`](https://github.com/Kostantinoskanell/thesis/tree/main/archive/M6_energy), [`M4b_terrain_walk_compare`](https://github.com/Kostantinoskanell/thesis/tree/main/archive/M4b_terrain_walk_compare)
 
+[&uarr; back to top](#top){: .section-jump}
+
 ---
 
-## L &mdash; locomotion layer
+## L &mdash; locomotion layer {: .track-l #l-track}
 
 The M-track found R-STDP can't fix a *body/physics* fault (icy terrain) from
 the navigation layer &mdash; it's below the navigator's interface. This track
 puts the spiking network in charge of the gait itself.
+
+<a id="l-walking"></a>
 
 <div class="gif-row">
 <figure><img src="https://raw.githubusercontent.com/Kostantinoskanell/thesis/main/archive/L4_gait_check/dagger_walk_forward_v3.gif" alt="Spiking Go2 walking, robust"><figcaption class="cap">final spiking walker, DAgger-robustified</figcaption></figure>
 <figure><img src="https://raw.githubusercontent.com/Kostantinoskanell/thesis/main/archive/L5_energy/sparse_t5_v3_walk.gif" alt="Sparse T5 spiking walker"><figcaption class="cap">sparsified, T=5, energy-positive</figcaption></figure>
 <figure><img src="https://raw.githubusercontent.com/Kostantinoskanell/thesis/main/archive/L4_gait_check/fig_distilled_gait.png" alt="gait diagnostic figure"></figure>
 </div>
+
+<a id="l-energy"></a>
 
 | Stage | Result |
 |---|---|
@@ -208,7 +236,17 @@ puts the spiking network in charge of the gait itself.
 | T=4 | 136.8 nJ, 1.36x cheaper, but **breaks walking** |
 | R-STDP on the gait (icy shift) | fall rate rises 25% &rarr; 53% &mdash; **destabilizes**, does not recover |
 
+<a id="l-rstdp"></a>The M-track found R-STDP has no surviving significant recovery advantage on
+any nav-layer shift; here, released directly onto the gait itself under icy
+terrain, it does not merely fail to help &mdash; **it actively destabilizes an
+otherwise-robust walker** (fall rate 25% &rarr; 53%), while never catastrophically
+forgetting the base task (anchor holds, ~77% retention). A meaningful
+nav-vs-locomotion contrast: reward-modulated plasticity's failure mode is
+different at each layer.
+
 Full write-ups: [`L4_gait_check`](https://github.com/Kostantinoskanell/thesis/tree/main/archive/L4_gait_check), [`L5_energy`](https://github.com/Kostantinoskanell/thesis/tree/main/archive/L5_energy)
+
+[&uarr; back to top](#top){: .section-jump}
 
 ---
 
@@ -251,3 +289,5 @@ co-processor. Full detail: [`ROADMAP.md`](https://github.com/Kostantinoskanell/t
 ---
 
 *Front page for [github.com/Kostantinoskanell/thesis](https://github.com/Kostantinoskanell/thesis).*
+
+<a href="#top" class="back-to-top">&uarr; top</a>

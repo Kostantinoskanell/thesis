@@ -3,6 +3,17 @@ layout: default
 title: How the SNN Pieces Work
 ---
 
+<a id="top"></a>
+
+<nav class="site-nav" aria-label="Section navigation">
+  <a href="index.md#d-track" class="nav-d">D &middot; foundation</a>
+  <a href="index.md#m-track" class="nav-m">M &middot; navigation</a>
+  <a href="index.md#l-track" class="nav-l">L &middot; locomotion</a>
+  <a href="#top" class="nav-c current">Concepts</a>
+  <a href="https://github.com/Kostantinoskanell/thesis/blob/main/docs/references/sota_decisions.md">Decision log</a>
+  <a href="https://github.com/Kostantinoskanell/thesis" class="nav-gh">GitHub</a>
+</nav>
+
 [&larr; Back to project overview](index.md)
 
 # How the SNN pieces work, and where they sit in this project
@@ -15,7 +26,19 @@ the alternatives, see the full dated log: [`sota_decisions.md`](https://github.c
 
 <img src="assets/img/concepts.svg" alt="LIF neuron, STDP, R-STDP, memristor analogy">
 
-## 1. LIF / ALIF neuron — the spiking unit
+<table class="quick-links" markdown="0">
+<thead><tr><th>#</th><th>Mechanism</th><th>Where it's used here</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><a href="#lif-alif">LIF / ALIF neuron</a></td><td>every controller; ALIF alone explains most of the shift-robustness found</td></tr>
+<tr><td>2</td><td><a href="#stdp">STDP</a></td><td>the Hebbian ablation &mdash; worst performer everywhere tested</td></tr>
+<tr><td>3</td><td><a href="#r-stdp">R-STDP</a></td><td>the project's original rule &mdash; no surviving significant win (D16/D18)</td></tr>
+<tr><td>4</td><td><a href="#e-prop">e-prop</a></td><td>structurally different 3-factor rule &mdash; also no significant win (D19)</td></tr>
+<tr><td>5</td><td><a href="#population-encoding">Population encoding</a></td><td>replaces stochastic rate coding to chase the H4 noise finding (D4)</td></tr>
+<tr><td>6</td><td><a href="#memristor-analogy">Memristor analogy</a></td><td>the FPGA co-processor's computational target (M7/M8)</td></tr>
+</tbody>
+</table>
+
+## 1. LIF / ALIF neuron — the spiking unit {: #lif-alif}
 
 A leaky integrate-and-fire (LIF) neuron accumulates input current onto a
 membrane potential that leaks over time, and fires a binary spike when the
@@ -43,7 +66,7 @@ neuron model alone (frozen LIF vs. frozen ALIF, no plasticity at all) found
 any plasticity rule managed on top of it (see the M-track table on the
 [home page](index.md)). Code: [`src/nmc/controllers/snn.py`](https://github.com/Kostantinoskanell/thesis/blob/main/src/nmc/controllers/snn.py), [`src/nmc/plasticity/eprop.py`](https://github.com/Kostantinoskanell/thesis/blob/main/src/nmc/plasticity/eprop.py) (`ALIFEpropLayer`).
 
-## 2. STDP — Hebbian, no notion of task success
+## 2. STDP — Hebbian, no notion of task success {: #stdp}
 
 Spike-timing-dependent plasticity strengthens a synapse when the presynaptic
 neuron fires *just before* the postsynaptic one (it plausibly contributed to
@@ -61,7 +84,7 @@ ablation that shows plasticity *without* a task signal is actively harmful
 here, not neutral. Code: [`src/nmc/plasticity/stdp.py`](https://github.com/Kostantinoskanell/thesis/blob/main/src/nmc/plasticity/stdp.py) (also the from-scratch
 golden reference the FPGA datapath is checked against).
 
-## 3. R-STDP — three-factor, one global reward
+## 3. R-STDP — three-factor, one global reward {: #r-stdp}
 
 Reward-modulated STDP adds a third factor. The Hebbian STDP update above
 still runs every timestep, but instead of being applied immediately it
@@ -90,7 +113,7 @@ is documented honestly on the [home page](index.md) and in [`sota_decisions.md` 
 It raised an obvious question: is the *shift* unrecoverable by any local
 learning rule, or is R-STDP specifically too crude?
 
-## 4. e-prop — same three-factor shape, a different eligibility trace and a per-neuron third factor
+## 4. e-prop — same three-factor shape, a different eligibility trace and a per-neuron third factor {: #e-prop}
 
 e-prop (Bellec, Scherr, Subramoney, Hajek, Salaj, Legenstein & Maass, *Nature
 Communications* 2020) answers that question by changing exactly two things
@@ -150,7 +173,7 @@ result found for R-STDP generalizes beyond R-STDP specifically, pointing at
 the neuron model (see §1) rather than online plasticity as the actual source
 of shift-robustness in this setup. Full record: [`archive/D1_eprop/README.md`](https://github.com/Kostantinoskanell/thesis/blob/main/archive/D1_eprop/README.md).
 
-## 5. Population encoding — replacing sampling noise with a learned code
+## 5. Population encoding — replacing sampling noise with a learned code {: #population-encoding}
 
 Every controller above turns a continuous observation (LiDAR ranges, goal
 bearing, etc.) into spikes with **stochastic rate coding**: each channel's
@@ -169,7 +192,7 @@ between the true value and that neuron's preferred value — no sampling step
 at all, and the tuning widths are learned end-to-end rather than hand-set.
 Code: [`src/nmc/controllers/snn_popenc.py`](https://github.com/Kostantinoskanell/thesis/blob/main/src/nmc/controllers/snn_popenc.py), training: [`scripts/train_snn_popenc_go2.py`](https://github.com/Kostantinoskanell/thesis/blob/main/scripts/train_snn_popenc_go2.py).
 
-## 6. The memristor analogy
+## 6. The memristor analogy {: #memristor-analogy}
 
 The FPGA co-processor (planned, M7/M8) does not model memristor device
 physics — it reproduces the *computational structure* a memristor crossbar
@@ -185,3 +208,5 @@ was scoped to support all of them without a redesign.
 ---
 
 *Back to [project overview](index.md) &middot; full decision log: [`sota_decisions.md`](https://github.com/Kostantinoskanell/thesis/blob/main/docs/references/sota_decisions.md) &middot; every bug: [`docs/debug-log`](https://github.com/Kostantinoskanell/thesis/tree/main/docs/debug-log/).*
+
+<a href="#top" class="back-to-top">&uarr; top</a>
