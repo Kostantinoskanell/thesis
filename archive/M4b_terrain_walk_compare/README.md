@@ -50,12 +50,35 @@ much of the overall failure rate this accounts for.
 `snn_rstdp_ice_mu028_warm15.gif` (the other terrain GIF featured on the site)
 was independently verified genuine — no fix needed there.
 
-## Open question this raises
+## Answered: the terrain result does NOT survive rigor either (2026-09-23)
 
 M4c's original terrain numbers (sand 47%/47%, ice 40% vs 27%/33%) were computed
 at n=15, one seed — the same kind of thin sample that turned out not to
-replicate for the sensor-dropout shift (M5). Given episode 0 alone failed for
-sand, and 4/5 of a small follow-up sample also failed, it is worth confirming
-the aggregate terrain numbers hold up at real multi-seed rigor before treating
-them as the thesis's settled positive result. See `scripts/m4c_rigorous.py` /
-`archive/M4c_rigorous/README.md` for that check.
+replicate for the sensor-dropout shift (M5). `scripts/m4c_rigorous.py` reran
+both terrain conditions at M5's exact standard (10 seeds x 30 eps, Holm-corrected,
+R-STDP's own 15-episode warm-up protocol preserved):
+
+| Terrain | Frozen MLP | Frozen SNN | R-STDP SNN | R-STDP vs Frozen SNN |
+|---|---|---|---|---|
+| Sand (mu=1.6) | 53.3%+/-10.9% | 42.3%+/-11.7% | 46.7%+/-10.5% | +4.3 pts, **p=0.421 (not significant)** |
+| Ice (mu=0.28) | 44.7%+/-10.7% | 29.0%+/-10.8% | 34.0%+/-13.3% | +5.0 pts, **p=0.393 (not significant)** |
+
+**Both of M4c's headline claims ("sand: fully closes the gap to the MLP",
+"ice: beats both") do not replicate.** R-STDP is numerically a few points above
+frozen SNN on both terrains, but nowhere close to significant at n=10 seeds --
+the same magnitude of effect (and the same fate) as M4's original sensor-dropout
+"win". Frozen SNN's own number moved substantially too (27%->42.3% sand,
+27%->29.0% ice), confirming M4c's n=15 single-ish sample was noisy on BOTH
+sides, not just R-STDP's.
+
+**Correction in progress:** the sand row above used mu=1.6 -- the severity M4c's own screening rejected as unusable, not the retuned mu=1.20 the actual headline claim was measured at. A corrected re-run is in progress; see `archive/M4c_rigorous/sand_mu120_correction.md` once it lands. The ice result (mu=0.28) is correct as tested.
+
+**Thesis-level consequence: at full statistical rigor, R-STDP currently has NO
+surviving significant recovery advantage on any shift type tested so far**
+(sensor dropout at two severities: null (M5); terrain sand: null; terrain ice:
+null). The remaining open questions are (a) the three shift types
+implemented-but-never-tested before tonight (sensor_bias, sensor_range,
+goal_drift -- `archive/shift_taxonomy/`), and (b) whether a structurally
+different learning rule (e-prop -- `archive/D1_eprop/`) succeeds where R-STDP
+did not. See [D18](../../docs/references/sota_decisions.md) for the full
+writeup. Full data: `archive/M4c_rigorous/README.md`.

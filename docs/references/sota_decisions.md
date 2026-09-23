@@ -852,6 +852,69 @@ opens: **D4 (drop stochastic rate coding for a latency/learned encoder)** now ha
 evidence behind it, and **D1 (e-prop)** remains the scoped upgrade path for the plasticity
 null. See D16 above for the companion M5 entry.
 
+## D18. M4c's terrain result does not replicate either — R-STDP now has zero surviving significant wins
+
+**Question:** M5 (D16) found M4's sensor-dropout "R-STDP recovery" win (30% vs
+17%) did not replicate at real multi-seed rigor. M4c's terrain result (R-STDP
+"closes the gap" on sand, "beats both" on ice) was the thesis's one remaining
+positive H1 evidence -- but it rested on the exact same kind of thin sample
+(n=15, one seed) that the dropout claim had before M5 broke it. Overdue check:
+does the terrain result survive the same treatment?
+
+**Method:** `scripts/m4c_rigorous.py` reproduces `render_terrain_videos.py`'s
+exact protocol (frozen MLP/SNN: no adaptation; R-STDP: 15-episode silent
+warm-up then measure) across 10 seeds x 30 episodes instead of M4c's original
+sample, with Holm-corrected Welch t-tests against R-STDP, matching M5's
+standard exactly.
+
+**Finding -- it does not replicate:**
+
+| Terrain | Frozen MLP | Frozen SNN | R-STDP SNN | R-STDP vs Frozen SNN |
+|---|---|---|---|---|
+| Sand (mu=1.6) | 53.3%+/-10.9% | 42.3%+/-11.7% | 46.7%+/-10.5% | +4.3 pts, p=0.421 |
+| Ice (mu=0.28) | 44.7%+/-10.7% | 29.0%+/-10.8% | 34.0%+/-13.3% | +5.0 pts, p=0.393 |
+
+Both of M4c's headline claims fail: R-STDP is not "closing the gap" to the MLP
+on sand (it is, if anything, 6.7 pts *below* the MLP, also not significant),
+and it does not "beat both" on ice (its lead over frozen SNN is real numerically
+but nowhere near significant, p=0.39). Frozen SNN's own number moved
+substantially between the two runs too (27%->42.3% sand, 27%->29.0% ice) --
+confirming the n=15 sample was noisy for the frozen baseline as much as for
+R-STDP, i.e. this is the same statistical-illusion mechanism as D16, not a
+new or different failure mode.
+
+**Correction note (same night):** the sand condition above was tested at mu=1.6, which turned out to be the value M4c's OWN earlier screening had REJECTED as unusable ("sand *helps* it to 55%") -- the actual headline claim ("closes the gap to the MLP") was measured at the RETUNED mu=1.20. A corrected re-run at mu=1.20 is in progress (`scripts/m4c_sand_correct_mu.py`); the ice result above is unaffected (0.28 is correctly the deep-dive's validated value). This entry will be updated once that lands.
+
+**Also discovered in the process (visual audit, before this rigor check ran):**
+the site's `snn_rstdp_sand.gif`, captioned as a recovery demo, was actually a
+recorded failure -- `render_terrain_videos.py` records episode 0 unconditionally
+with no success check (unlike `eval_mlp_go2.py`'s own `eval_frozen`, which only
+keeps a GIF `if reached`). Fixed by finding a verified success; see
+`archive/M4b_terrain_walk_compare/README.md`. 4 of 5 attempts along the way
+were dynamic-obstacle collisions, and a separate audit
+(`scripts/m5_collision_kind_audit.py`) confirmed **70-73% of ALL collisions
+across every controller, on the standard procedural map, are with a moving
+obstacle** -- a confound unrelated to whichever shift is nominally being
+studied. This directly motivated `scripts/custom_map.py`, a hand-designed
+deterministic map for cleaner future tests.
+
+**Thesis-level consequence:** at full statistical rigor, R-STDP currently has
+**no surviving significant recovery advantage on any shift type tested** --
+sensor dropout at two severities (D16/M5), terrain sand, terrain ice (this
+entry). This is a materially different position than the roadmap held as of
+D16/D17: H1 is not merely "shift-dependent" (real on terrain, absent on
+sensor-level faults) -- so far it has not been demonstrated anywhere at
+rigor. This does not mean H1 is false; it means the two pieces of evidence
+that seemed to support it were both single-seed artifacts, caught by doing
+exactly what M5/M4c's own writeups said should be done next. Two open paths
+remain, both in progress the same night this was found: (a) the three
+previously-untested shift types (`sensor_bias`, `sensor_range`, `goal_drift`
+-- see `archive/shift_taxonomy/`), since the shift-dependence hypothesis may
+still hold for a shift class not yet tried; (b) e-prop (D1), a structurally
+different three-factor rule, tested under identical conditions
+(`archive/D1_eprop/`) to separate "the rule" from "the problem" as the cause
+of R-STDP's null results so far.
+
 ---
 
 _Update this log whenever a new SOTA option is identified. Every "we chose the simpler

@@ -42,7 +42,7 @@ insertion points (M-track and L-track) against the same frozen baseline.
 | M (navigation) | Energy vs MLP | SynOps / full accounting | 10.4x / 2.4x cheaper |
 | M (navigation) | Shift-robustness source | frozen-LIF vs frozen-ALIF | +10 pts (p=0.05) &mdash; it's the neuron model |
 | M (navigation) | R-STDP recovery vs frozen SNN | sensor dropout, 10 seeds x 30 eps | no significant effect (6 checks) |
-| M (navigation) | R-STDP recovery vs frozen SNN | terrain (sand/ice) | full recovery to MLP level |
+| M (navigation) | R-STDP recovery vs frozen SNN | terrain (sand/ice), 10 seeds | no significant effect either (D18) |
 | M (navigation) | Noise robustness (H4) | success at sigma=0.8 | MLP 38% vs SNN 18% &mdash; refuted |
 | L (locomotion) | Energy vs MLP | best config (T=5, sparsity-regularized) | 1.04x cheaper |
 | L (locomotion) | R-STDP on the gait | icy terrain | destabilizes it (honest negative) |
@@ -121,16 +121,16 @@ severity sweep below.
 | R-STDP SNN | 48.0% | 24.0% | 12.0% | 12.0% |
 | TM-NORM SNN | 2.0% | 0.0% | 2.0% | 2.0% |
 
-**Terrain shift (frozen MLP / frozen SNN / R-STDP SNN):**
+**Terrain shift -- UPDATE: also does not replicate at rigor.**
 
-| Terrain | Frozen MLP | Frozen SNN | R-STDP SNN |
-|---|---|---|---|
-| Sand (mu=1.20) | 47% | 27% | **47%** (full recovery) |
-| Ice (mu=0.28) | 33% | 27% | **40%** (beats both) |
+The n=15/one-seed numbers above (sand: R-STDP 47% "closes the gap"; ice: R-STDP 40% "beats both") were the SAME kind of thin sample that turned out not to replicate for sensor dropout -- and a 10-seed/30-episode/Holm-corrected re-run confirms it:
 
-Original numbers at n=15, one seed -- the same thin sample size that turned out
-not to replicate for sensor dropout (below). A multi-seed, Holm-corrected
-re-check is in progress; see `archive/M4c_rigorous/README.md` once it lands.
+| Terrain | Frozen MLP | Frozen SNN | R-STDP SNN | R-STDP vs Frozen SNN |
+|---|---|---|---|---|
+| Ice (mu=0.28) | 44.7% | 29.0% | 34.0% | +5.0 pts, p=0.393 (not significant) |
+| Sand (mu=1.6, under correction to the actually-claimed mu=1.20) | 53.3% | 42.3% | 46.7% | +4.3 pts, p=0.421 (not significant) |
+
+**R-STDP currently has no surviving significant recovery advantage on any shift type tested** (sensor dropout, terrain sand, terrain ice). See `docs/references/sota_decisions.md` D18 for the full account, and the overnight shift-taxonomy sweep (sensor_bias/sensor_range/goal_drift) and e-prop test for the remaining open questions.
 
 **Energy per decision, 45 nm Horowitz model (nJ):**
 

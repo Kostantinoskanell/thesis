@@ -32,7 +32,13 @@ import concurrent.futures
 OUT = Path("archive/M4c_rigorous")
 WARMUP = 15
 MEASURE = 30
-CONDITIONS = {"sand": 1.6, "ice_mu028": 0.28}   # mu=1.6 is M4c's default sand; 0.28 is its VALIDATED best ice
+CONDITIONS = {"sand": 1.6, "ice_mu028": 0.28, "sand_mu120": 1.20}
+# mu=1.6 is render_terrain_videos.py's bare CLI default -- but that is the value
+# M4c's OWN screening REJECTED as unusable ("sand *helps* it to 55%"). The real
+# headline claim ("closes the gap to the MLP") was measured at the RETUNED
+# mu=1.20 (see ROADMAP.md's M4c row) -- "sand_mu120" is the correct condition
+# to stress-test that specific claim; "sand" (1.6) is kept for reference only.
+# ice_mu028 (0.28) is correct as-is: it matches the deep-dive's validated value.
 CONTROLLERS = ["Frozen MLP", "Frozen SNN", "R-STDP SNN"]
 
 
