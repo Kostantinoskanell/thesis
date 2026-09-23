@@ -9,7 +9,7 @@ title: Home
   <a href="#d-track" class="nav-d">D &middot; foundation</a>
   <a href="#m-track" class="nav-m">M &middot; navigation</a>
   <a href="#l-track" class="nav-l">L &middot; locomotion</a>
-  <a href="concepts.md" class="nav-c">Concepts</a>
+  <a href="concepts.html" class="nav-c">Concepts</a>
   <a href="https://github.com/Kostantinoskanell/thesis/blob/main/docs/references/sota_decisions.md">Decision log</a>
   <a href="https://github.com/Kostantinoskanell/thesis" class="nav-gh">GitHub</a>
 </nav>
@@ -37,7 +37,7 @@ Two-layer control, closed loop, under a shift: a navigator decides *where to
 go*, a locomotion policy walks the robot there. R-STDP is tested at both
 insertion points (M-track and L-track) against the same frozen baseline.
 
-## Core mechanisms {: .track-c #concepts}
+<h2 id="concepts" class="track-c">Core mechanisms</h2>
 
 <img src="assets/img/concepts.svg" alt="LIF neuron, STDP, R-STDP, memristor analogy">
 
@@ -72,7 +72,7 @@ Full equations, code pointers, and how e-prop and population coding fit in: [**H
 
 ---
 
-## D &mdash; dynamics foundation {: .track-d #d-track}
+<h2 id="d-track" class="track-d">D &mdash; dynamics foundation</h2>
 
 Go2 stands and walks under full physics before any plasticity science runs;
 no pretrained policy existed, so one was trained from scratch and exported to
@@ -97,11 +97,11 @@ the L-track both drive.
 
 Details: [`D2_go2_rl_go2model`](https://github.com/Kostantinoskanell/thesis/tree/main/archive/D2_go2_rl_go2model), [`D3a_policy_export_windows`](https://github.com/Kostantinoskanell/thesis/tree/main/archive/D3a_policy_export_windows), [`D3_go2_nav_env`](https://github.com/Kostantinoskanell/thesis/tree/main/archive/D3_go2_nav_env)
 
-[&uarr; back to top](#top){: .section-jump}
+<a href="#top" class="section-jump">&uarr; back to top</a>
 
 ---
 
-## M &mdash; navigation layer {: .track-m #m-track}
+<h2 id="m-track" class="track-m">M &mdash; navigation layer</h2>
 
 An SNN/MLP decides *where to go* from LiDAR; the D-track policy walks the
 robot there. Question: does releasing the SNN to R-STDP recover faster than a
@@ -206,11 +206,11 @@ rate coding *samples* the sensor, so noise compounds with sampling noise.
 
 Full write-ups: [`M5_full_comparison`](https://github.com/Kostantinoskanell/thesis/tree/main/archive/M5_full_comparison), [`M4b_extras`](https://github.com/Kostantinoskanell/thesis/tree/main/archive/M4b_extras), [`M6_energy`](https://github.com/Kostantinoskanell/thesis/tree/main/archive/M6_energy), [`M4b_terrain_walk_compare`](https://github.com/Kostantinoskanell/thesis/tree/main/archive/M4b_terrain_walk_compare)
 
-[&uarr; back to top](#top){: .section-jump}
+<a href="#top" class="section-jump">&uarr; back to top</a>
 
 ---
 
-## L &mdash; locomotion layer {: .track-l #l-track}
+<h2 id="l-track" class="track-l">L &mdash; locomotion layer</h2>
 
 The M-track found R-STDP can't fix a *body/physics* fault (icy terrain) from
 the navigation layer &mdash; it's below the navigator's interface. This track
@@ -246,7 +246,7 @@ different at each layer.
 
 Full write-ups: [`L4_gait_check`](https://github.com/Kostantinoskanell/thesis/tree/main/archive/L4_gait_check), [`L5_energy`](https://github.com/Kostantinoskanell/thesis/tree/main/archive/L5_energy)
 
-[&uarr; back to top](#top){: .section-jump}
+<a href="#top" class="section-jump">&uarr; back to top</a>
 
 ---
 

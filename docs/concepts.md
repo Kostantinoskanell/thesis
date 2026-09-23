@@ -6,9 +6,9 @@ title: How the SNN Pieces Work
 <a id="top"></a>
 
 <nav class="site-nav" aria-label="Section navigation">
-  <a href="index.md#d-track" class="nav-d">D &middot; foundation</a>
-  <a href="index.md#m-track" class="nav-m">M &middot; navigation</a>
-  <a href="index.md#l-track" class="nav-l">L &middot; locomotion</a>
+  <a href="index.html#d-track" class="nav-d">D &middot; foundation</a>
+  <a href="index.html#m-track" class="nav-m">M &middot; navigation</a>
+  <a href="index.html#l-track" class="nav-l">L &middot; locomotion</a>
   <a href="#top" class="nav-c current">Concepts</a>
   <a href="https://github.com/Kostantinoskanell/thesis/blob/main/docs/references/sota_decisions.md">Decision log</a>
   <a href="https://github.com/Kostantinoskanell/thesis" class="nav-gh">GitHub</a>
@@ -38,7 +38,7 @@ the alternatives, see the full dated log: [`sota_decisions.md`](https://github.c
 </tbody>
 </table>
 
-## 1. LIF / ALIF neuron — the spiking unit {: #lif-alif}
+<h2 id="lif-alif">1. LIF / ALIF neuron — the spiking unit</h2>
 
 A leaky integrate-and-fire (LIF) neuron accumulates input current onto a
 membrane potential that leaks over time, and fires a binary spike when the
@@ -66,7 +66,7 @@ neuron model alone (frozen LIF vs. frozen ALIF, no plasticity at all) found
 any plasticity rule managed on top of it (see the M-track table on the
 [home page](index.md)). Code: [`src/nmc/controllers/snn.py`](https://github.com/Kostantinoskanell/thesis/blob/main/src/nmc/controllers/snn.py), [`src/nmc/plasticity/eprop.py`](https://github.com/Kostantinoskanell/thesis/blob/main/src/nmc/plasticity/eprop.py) (`ALIFEpropLayer`).
 
-## 2. STDP — Hebbian, no notion of task success {: #stdp}
+<h2 id="stdp">2. STDP — Hebbian, no notion of task success</h2>
 
 Spike-timing-dependent plasticity strengthens a synapse when the presynaptic
 neuron fires *just before* the postsynaptic one (it plausibly contributed to
@@ -84,7 +84,7 @@ ablation that shows plasticity *without* a task signal is actively harmful
 here, not neutral. Code: [`src/nmc/plasticity/stdp.py`](https://github.com/Kostantinoskanell/thesis/blob/main/src/nmc/plasticity/stdp.py) (also the from-scratch
 golden reference the FPGA datapath is checked against).
 
-## 3. R-STDP — three-factor, one global reward {: #r-stdp}
+<h2 id="r-stdp">3. R-STDP — three-factor, one global reward</h2>
 
 Reward-modulated STDP adds a third factor. The Hebbian STDP update above
 still runs every timestep, but instead of being applied immediately it
@@ -113,7 +113,7 @@ is documented honestly on the [home page](index.md) and in [`sota_decisions.md` 
 It raised an obvious question: is the *shift* unrecoverable by any local
 learning rule, or is R-STDP specifically too crude?
 
-## 4. e-prop — same three-factor shape, a different eligibility trace and a per-neuron third factor {: #e-prop}
+<h2 id="e-prop">4. e-prop — same three-factor shape, a different eligibility trace and a per-neuron third factor</h2>
 
 e-prop (Bellec, Scherr, Subramoney, Hajek, Salaj, Legenstein & Maass, *Nature
 Communications* 2020) answers that question by changing exactly two things
@@ -173,7 +173,7 @@ result found for R-STDP generalizes beyond R-STDP specifically, pointing at
 the neuron model (see §1) rather than online plasticity as the actual source
 of shift-robustness in this setup. Full record: [`archive/D1_eprop/README.md`](https://github.com/Kostantinoskanell/thesis/blob/main/archive/D1_eprop/README.md).
 
-## 5. Population encoding — replacing sampling noise with a learned code {: #population-encoding}
+<h2 id="population-encoding">5. Population encoding — replacing sampling noise with a learned code</h2>
 
 Every controller above turns a continuous observation (LiDAR ranges, goal
 bearing, etc.) into spikes with **stochastic rate coding**: each channel's
@@ -192,7 +192,7 @@ between the true value and that neuron's preferred value — no sampling step
 at all, and the tuning widths are learned end-to-end rather than hand-set.
 Code: [`src/nmc/controllers/snn_popenc.py`](https://github.com/Kostantinoskanell/thesis/blob/main/src/nmc/controllers/snn_popenc.py), training: [`scripts/train_snn_popenc_go2.py`](https://github.com/Kostantinoskanell/thesis/blob/main/scripts/train_snn_popenc_go2.py).
 
-## 6. The memristor analogy {: #memristor-analogy}
+<h2 id="memristor-analogy">6. The memristor analogy</h2>
 
 The FPGA co-processor (planned, M7/M8) does not model memristor device
 physics — it reproduces the *computational structure* a memristor crossbar
