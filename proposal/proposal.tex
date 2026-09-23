@@ -7,7 +7,7 @@
 \usepackage{xcolor}
 \usepackage{booktabs}
 \usepackage{enumitem}
-\usepackage{microtype}
+\usepackage[expansion=false]{microtype}
 \usepackage{titlesec}
 \usepackage{subcaption}
 \usepackage[skins, breakable]{tcolorbox}
@@ -267,8 +267,7 @@ co-processor.
 
 \begin{figure}[htbp]
     \centering
-    % Replace with the exact filename you uploaded
-    \includegraphics[width=0.6\textwidth]{mermaid-diagram.png}
+    \includegraphics[width=\textwidth]{architecture.pdf}
     \caption{System Architecture showing the closed-loop control and FPGA co-processor.}
     \label{fig:sys_arch}
 \end{figure}
