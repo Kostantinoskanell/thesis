@@ -78,7 +78,7 @@ frozen network after a shift?
 <div class="gif-row">
 <figure><img src="archive/D3_go2_nav_env/nav_episode.gif" alt="Go2 navigating with a mid-episode shift"><figcaption class="cap">the task: goal + obstacles + mid-episode shift</figcaption></figure>
 <figure><img src="archive/M1b_expert/episode.gif" alt="Scripted A* expert episode"><figcaption class="cap">privileged A* teacher, original 2D kinematic env (pre-MuJoCo)</figcaption></figure>
-<figure><img src="archive/M4b_terrain_walk_compare/snn_rstdp_sand.gif" alt="R-STDP recovering on sand"><figcaption class="cap">R-STDP on sand: one verified success (aggregate stat being re-checked)</figcaption></figure>
+<figure><img src="archive/M4b_terrain_walk_compare/snn_rstdp_sand.gif" alt="R-STDP recovering on sand"><figcaption class="cap">R-STDP on sand: one verified success (aggregate: significantly worse than MLP, see below)</figcaption></figure>
 <figure><img src="archive/M4b_terrain_walk_compare/snn_rstdp_ice_mu028_warm15.gif" alt="R-STDP recovering on ice"><figcaption class="cap">R-STDP on ice, mu=0.28: verified success</figcaption></figure>
 </div>
 
@@ -116,16 +116,16 @@ severity sweep below.
 | R-STDP SNN | 48.0% | 24.0% | 12.0% | 12.0% |
 | TM-NORM SNN | 2.0% | 0.0% | 2.0% | 2.0% |
 
-**Terrain shift -- UPDATE: also does not replicate at rigor.**
+**Terrain shift -- UPDATE: also does not replicate at rigor (and reverses on sand).**
 
-The n=15/one-seed numbers above (sand: R-STDP 47% "closes the gap"; ice: R-STDP 40% "beats both") were the SAME kind of thin sample that turned out not to replicate for sensor dropout -- and a 10-seed/30-episode/Holm-corrected re-run confirms it:
+The n=15/one-seed numbers above (sand: R-STDP 47% "closes the gap"; ice: R-STDP 40% "beats both") were the SAME kind of thin sample that turned out not to replicate for sensor dropout -- and a 10-seed/30-episode/Holm-corrected re-run (at the sand severity the original claim actually used, mu=1.20) confirms it, decisively:
 
-| Terrain | Frozen MLP | Frozen SNN | R-STDP SNN | R-STDP vs Frozen SNN |
-|---|---|---|---|---|
-| Ice (mu=0.28) | 44.7% | 29.0% | 34.0% | +5.0 pts, p=0.393 (not significant) |
-| Sand (mu=1.6, under correction to the actually-claimed mu=1.20) | 53.3% | 42.3% | 46.7% | +4.3 pts, p=0.421 (not significant) |
+| Terrain | Frozen MLP | Frozen SNN | R-STDP SNN | R-STDP vs Frozen SNN | R-STDP vs Frozen MLP |
+|---|---|---|---|---|---|
+| Ice (mu=0.28) | 44.7% | 29.0% | 34.0% | +5.0 pts, p=0.393 (n.s.) | -10.7 pts, p=0.156 (n.s.) |
+| Sand (mu=1.20) | 55.0% | 42.7% | 40.3% | -2.3 pts, p=0.626 (n.s., numerically worse) | **-14.7 pts, p=0.019 (SIGNIFICANTLY worse)** |
 
-**R-STDP currently has no surviving significant recovery advantage on any shift type tested** (sensor dropout, terrain sand, terrain ice). See `docs/references/sota_decisions.md` D18 for the full account, and the overnight shift-taxonomy sweep (sensor_bias/sensor_range/goal_drift) and e-prop test for the remaining open questions.
+On sand -- the condition M4c's headline claim rested on -- R-STDP is not "closing the gap to the MLP", it is **significantly further from the MLP than the frozen SNN is**. **R-STDP currently has no surviving significant recovery advantage on any shift type tested** (sensor dropout, terrain sand, terrain ice). See `docs/references/sota_decisions.md` D18 for the full account, and the overnight shift-taxonomy sweep (sensor_bias/sensor_range/goal_drift) and e-prop test for the remaining open questions.
 
 **Energy per decision, 45 nm Horowitz model (nJ):**
 

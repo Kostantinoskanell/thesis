@@ -71,7 +71,15 @@ the same magnitude of effect (and the same fate) as M4's original sensor-dropout
 27%->29.0% ice), confirming M4c's n=15 single-ish sample was noisy on BOTH
 sides, not just R-STDP's.
 
-**Correction in progress:** the sand row above used mu=1.6 -- the severity M4c's own screening rejected as unusable, not the retuned mu=1.20 the actual headline claim was measured at. A corrected re-run is in progress; see `archive/M4c_rigorous/sand_mu120_correction.md` once it lands. The ice result (mu=0.28) is correct as tested.
+**Correction, resolved:** the sand row above used mu=1.6 -- the severity M4c's own screening rejected as unusable, not the retuned mu=1.20 the actual headline claim was measured at. Re-run at the correct mu=1.20 (`archive/M4c_rigorous/sand_mu120_correction.md`):
+
+| controller | success (mean+/-SD) |
+|---|---|
+| Frozen MLP | 55.0%+/-10.2% |
+| Frozen SNN | 42.7%+/-8.7% |
+| R-STDP SNN | 40.3%+/-11.1% |
+
+R-STDP vs Frozen SNN: -2.3 pts, p=0.626 (not significant, numerically worse). R-STDP vs Frozen MLP: **-14.7 pts, p=0.019 -- SIGNIFICANTLY worse**, the exact opposite of "closes the gap to the MLP". The ice result (mu=0.28) was correct as originally tested.
 
 **Thesis-level consequence: at full statistical rigor, R-STDP currently has NO
 surviving significant recovery advantage on any shift type tested so far**
