@@ -963,5 +963,40 @@ rule rather than concluding from R-STDP alone. Full write-up: `archive/D1_eprop/
 
 ---
 
+## D20. Shift taxonomy complete: R-STDP has zero significant wins across all six shift types tested
+
+**Question:** three shift types (`sensor_bias`, `sensor_range`, `goal_drift`) had been
+implemented in `Go2NavConfig` since early on but never actually tested — every prior
+R-STDP result (M5 sensor dropout, M4c terrain sand/ice) covered only two shift classes.
+Was "R-STDP doesn't help" specific to those two classes, or does it hold more broadly?
+
+**Method:** `scripts/shift_taxonomy.py`, M5's exact two-stage protocol (severity screen,
+5 seeds x 15 eps, 5 points; then full rigor sweep, 10 seeds x 30 eps, Holm-corrected vs
+R-STDP) applied fresh to each of the three shift types. Survived an actual host machine
+reboot mid-run (not a bug in the script -- `sensor_range`'s first attempt was lost and
+had to be redone via `scripts/shift_taxonomy_resume.py`, which resumes the same
+severity-then-rigor loop for whichever shift types hadn't finished).
+
+**Result — a clean sweep of null results:**
+
+| shift type | severity | Frozen SNN | R-STDP SNN | Holm p | significant? |
+|---|---|---|---|---|---|
+| `sensor_bias` | 3.0 | 17.7% | 21.3% | 0.175 | no |
+| `sensor_range` | 2.0 | 32.3% | 25.0% | 0.124 | no |
+| `goal_drift` | 0.9 | 37.0% | 38.3% | 1.000 | no |
+
+**Decision: the shift taxonomy is now complete at six shift types (sensor dropout D16,
+terrain sand/ice D18, sensor_bias/sensor_range/goal_drift this entry), and R-STDP shows
+a significant recovery advantage over a frozen network on precisely zero of them.**
+This closes the last open question from D18 ("maybe a shift class not yet tried") and
+from D1/D19 (e-prop also failed independently, on a different rule). Combined with
+D17's neuron-model ablation, the thesis's defensible position is that shift-robustness
+in this setup comes from the **neuron model** (ALIF's adaptive threshold), not from
+online synaptic plasticity of any rule tested — checked thoroughly across shift class,
+plasticity rule, and severity, not asserted from a single result. Full record:
+`archive/shift_taxonomy/README.md`.
+
+---
+
 _Update this log whenever a new SOTA option is identified. Every "we chose the simpler
 thing" must have an entry saying why and when to revisit._

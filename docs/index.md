@@ -62,6 +62,7 @@ Full equations, code pointers, and how e-prop and population coding fit in: [**H
 <tr><td>M (navigation)</td><td><a href="#m-rstdp-dropout">R-STDP recovery vs frozen SNN</a></td><td>sensor dropout, 10 seeds x 30 eps</td><td>no significant effect (6 checks)</td></tr>
 <tr><td>M (navigation)</td><td><a href="#m-rstdp-terrain">R-STDP recovery vs frozen SNN</a></td><td>terrain (sand/ice), 10 seeds</td><td>no significant effect either (D18)</td></tr>
 <tr><td>M (navigation)</td><td><a href="#m-eprop">e-prop recovery vs frozen SNN</a></td><td>sensor dropout, identical protocol</td><td>also no significant effect (D19) &mdash; null generalizes beyond R-STDP</td></tr>
+<tr><td>M (navigation)</td><td><a href="#m-shift-taxonomy">R-STDP recovery, full shift taxonomy</a></td><td>6 shift types, 10 seeds x 30 eps each</td><td>zero significant wins anywhere (D20)</td></tr>
 <tr><td>M (navigation)</td><td><a href="#m-noise">Noise robustness (H4)</a></td><td>success at sigma=0.8</td><td>MLP 38% vs SNN 18% &mdash; refuted</td></tr>
 <tr><td>L (locomotion)</td><td><a href="#l-energy">Energy vs MLP</a></td><td>best config (T=5, sparsity-regularized)</td><td>1.04x cheaper</td></tr>
 <tr><td>L (locomotion)</td><td><a href="#l-rstdp">R-STDP on the gait</a></td><td>icy terrain</td><td>destabilizes it (honest negative)</td></tr>
@@ -168,7 +169,17 @@ On sand -- the condition M4c's headline claim rested on -- R-STDP is not "closin
 | 0.20 | Frozen SNN | +7.3 pts | 0.231 | no |
 | 0.20 | R-STDP SNN | +9.3 pts | 0.078 | no |
 
-e-prop does not show a significant advantage over frozen SNN either -- the null result **generalizes beyond R-STDP specifically**. Combined with the neuron-model ablation above (frozen ALIF alone: +10 pts that no plasticity rule tested has topped), the most defensible reading is that **the neuron model, not online synaptic plasticity, is doing the shift-robustness work** in this setup. Full record: [`archive/D1_eprop/README.md`](https://github.com/Kostantinoskanell/thesis/tree/main/archive/D1_eprop), decision log: `docs/references/sota_decisions.md` D19. Remaining open question: the overnight shift-taxonomy sweep (sensor_bias/sensor_range/goal_drift), since the shift-dependence hypothesis may still hold for a shift class not yet tried.
+e-prop does not show a significant advantage over frozen SNN either -- the null result **generalizes beyond R-STDP specifically**. Combined with the neuron-model ablation above (frozen ALIF alone: +10 pts that no plasticity rule tested has topped), the most defensible reading is that **the neuron model, not online synaptic plasticity, is doing the shift-robustness work** in this setup. Full record: [`archive/D1_eprop/README.md`](https://github.com/Kostantinoskanell/thesis/tree/main/archive/D1_eprop), decision log: `docs/references/sota_decisions.md` D19.
+
+<a id="m-shift-taxonomy"></a>**The shift taxonomy is now complete -- three more shift types, three more null results.** `sensor_bias`, `sensor_range`, and `goal_drift` had been implemented since early on but never tested (every prior result covered only sensor dropout and terrain). Run through the identical M5 protocol (severity screen + 10-seed Holm-corrected rigor sweep):
+
+| shift type | Frozen SNN | R-STDP SNN | Holm p vs R-STDP | significant? |
+|---|---|---|---|---|
+| sensor_bias | 17.7% | 21.3% | 0.175 | no |
+| sensor_range | 32.3% | 25.0% | 0.124 | no |
+| goal_drift | 37.0% | 38.3% | 1.000 | no |
+
+Across all **six** shift types tested (sensor dropout, terrain sand, terrain ice, sensor_bias, sensor_range, goal_drift), **R-STDP has a significant recovery advantage over a frozen network on exactly zero of them.** This closes the last open question in the taxonomy -- it is not that R-STDP happens to help on some shift classes and not others; it does not help on any tested so far. Full record: [`archive/shift_taxonomy/README.md`](https://github.com/Kostantinoskanell/thesis/tree/main/archive/shift_taxonomy), decision log: `docs/references/sota_decisions.md` D20.
 
 <a id="m-energy"></a>**Energy per decision, 45 nm Horowitz model (nJ):**
 
